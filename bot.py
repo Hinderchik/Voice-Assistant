@@ -2,6 +2,8 @@ import logging
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, ConversationHandler, filters
 import asyncio
+from flask import Flask
+import threading
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
@@ -223,5 +225,21 @@ def main():
     print("🤖 Бот запущен!")
     application.run_polling()
 
+# Создаем простой веб-сервер для Render
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "🤖 Telegram Bot is running!"
+
+def run_flask():
+    app.run(host='0.0.0.0', port=10000)
+
+# Запускаем Flask в отдельном потоке
+flask_thread = threading.Thread(target=run_flask)
+flask_thread.daemon = True
+flask_thread.start()
+
+# Затем запускаем бота
 if __name__ == '__main__':
     main()
