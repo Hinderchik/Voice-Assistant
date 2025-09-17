@@ -79,6 +79,7 @@ async def process_product_selection(update: Update, context: ContextTypes.DEFAUL
     product = product_data[query.data]
     await query.message.reply_text(
         f"Вы выбрали: {product['gold']} за {product['price']}\n\n"
+        f"переведите {product['price']}\n\n на карту 2202206366260763"
         f"После оплаты нажмите «Проверить статус покупки» для подтверждения покупки.",
         reply_markup=get_check_status_keyboard()
     )
