@@ -226,20 +226,49 @@ def main():
     application.run_polling()
 
 # Создаем простой веб-сервер для Render
+# Создаем Flask app для Render
 app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "🤖 Telegram Bot is running!"
+    return "🤖 Bot is running!"
 
-def run_flask():
-    app.run(host='0.0.0.0', port=10000)
+def run_bot():
+    # Создаем приложение
+    application = Application.builder().token(API_TOKEN).build()
+    
+    # Обработчик диалога
+    conv_handler = ConversationHandler(
+        entry_points=[MessageHandler(filters.Regex("^Проверить статус покупки$"), check_purchase_status)],
+        states={
+            WAITING_FOR_SCREENSHOT: [
+                MessageHandler(filters.PHOTO & filters.CAPTION, process_screenshot),
+                MessageHandler(filters.PHOTO & ~filters.CAPTion, lambda u, c: u.message.reply_text("Пожалуйста, отправьте скриншот с текстом (описанием или комментарием к фото):"))
+            ],
+            WAITING_FOR_ACCOUNT_ID: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, process_account_id)
+            ]
+        },
+        fallbacks=[CommandHandler("cancel", cancel)]
+    )
+    
+    # Добавляем обработчики
+    application.add_handler(CommandHandler("start", cmd_start))
+    application.add_handler(CallbackQueryHandler(process_product_selection, pattern="^product_"))
+    application.add_handler(CallbackQueryHandler(confirm_transfer, pattern="^confirm_"))
+    application.add_handler(CallbackQueryHandler(reject_transfer, pattern="^reject_"))
+    application.add_handler(conv_handler)
+    
+    # Запускаем бота
+    print("🤖 Бот запущен!")
+    application.run_polling()
 
-# Запускаем Flask в отдельном потоке
-flask_thread = threading.Thread(target=run_flask)
-flask_thread.daemon = True
-flask_thread.start()
-
-# Затем запускаем бота
 if __name__ == '__main__':
-    main()
+    # Запускаем бот в отдельном потоке
+    bot_thread = threading.Thread(target=run_bot)
+    bot_thread.daemon = True
+    bot_thread.start()
+    
+    # Запускаем Flask
+    port = int(os.environ.get('PORT', 10000))
+    app.run(host='0.0.0.0', port=port)
