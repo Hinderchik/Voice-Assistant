@@ -1,9 +1,9 @@
 import logging
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, ConversationHandler, filters
-import asyncio
 from flask import Flask
 import threading
+import os
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
@@ -12,10 +12,10 @@ logging.basicConfig(level=logging.INFO)
 API_TOKEN = '8394353258:AAE32axrlAIZ3aIGIYE4K1S-6E8EGpZ4YhY'
 
 # ID чата для подтверждения
-ADMIN_CHAT_ID = -1003020118085  # ← ВОТ ЭТОТ НОВЫЙ ID
+ADMIN_CHAT_ID = -1003020118085
 
 # Состояния
-WAITING_FOR_SCREENSHOT, WAITING_FOR_ACCOUNT_ID = range(2)
+WAITING_FOR_SCREENSHOT, WAITING_FOR_ACCOUNT_ID, WAITING_FOR_REVIEW = range(3)
 
 # Клавиатура с товарами
 def get_products_keyboard():
@@ -42,6 +42,11 @@ def get_admin_keyboard(purchase_id):
         ]
     ]
     return InlineKeyboardMarkup(keyboard)
+
+# Клавиатура для отзыва
+def get_review_keyboard():
+    keyboard = [[KeyboardButton("Оставить отзыв")]]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 # Обработчик команды /start
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -108,6 +113,9 @@ async def process_account_id(update: Update, context: ContextTypes.DEFAULT_TYPE)
     account_id = update.message.text
     user_data = context.user_data
     
+    # Сохраняем ID аккаунта для отзыва
+    context.user_data['account_id'] = account_id
+    
     # Отправляем данные админам
     admin_message = f"""
 🛒 Новая покупка!
@@ -138,8 +146,6 @@ async def process_account_id(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.message.reply_text("❌ Произошла ошибка при обработке вашего запроса. Попробуйте позже.")
         logging.error(f"Error sending to admin: {e}")
     
-    # Очищаем данные пользователя
-    context.user_data.clear()
     return ConversationHandler.END
 
 # Обработчик подтверждения перевода админом
@@ -153,17 +159,93 @@ async def confirm_transfer(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Уведомляем покупателя
         await context.bot.send_message(
             chat_id=user_id,
-            text="✅ Голда отправлена! не пришло? свяжитесь с поддержкой: @Skuuuchn"
+            text="✅ Голда отправлена! Не пришло? свяжитесь с поддержкой: @Skuuuchn\n\n"
+                 "Пожалуйста, оставьте отзыв! 📝\n"
+                 "Можно отправить скриншот аккаунта где видно голду и сам отзыв (можно и без фото!)",
+            reply_markup=get_review_keyboard()
         )
+        
+        # Сохраняем user_id для отзыва
+        context.bot_data[user_id] = {'waiting_review': True}
         
         # Обновляем сообщение у админа
         await query.message.edit_caption(
-            caption=f"✅ Перевод подтвержден администратором @{query.from_user.username}",
+            caption=f"✅ Перевод подтвержден администратором @{query.from_user.username}\n"
+                    f"👤 Покупатель уведомлен и может оставить отзыв",
             reply_markup=None
         )
         
     except Exception as e:
         logging.error(f"Error confirming transfer: {e}")
+
+# Обработчик кнопки "Оставить отзыв"
+async def request_review(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "📝 Пожалуйста, напишите ваш отзыв!\n"
+        "Можно прикрепить скриншот аккаунта с голдой (но это не обязательно).\n"
+        "Просто напишите текст отзыва и отправьте."
+    )
+    return WAITING_FOR_REVIEW
+
+# Обработчик отзыва
+async def process_review(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.from_user.id
+    username = update.message.from_user.username or 'нет username'
+    
+    if update.message.photo:
+        # Если есть фото
+        photo_id = update.message.photo[-1].file_id
+        review_text = update.message.caption or "Без текста"
+        
+        # Отправляем админам
+        review_message = f"""
+⭐ Новый отзыв!
+
+👤 От: @{username} ({user_id})
+📝 Текст: {review_text}
+        """
+        
+        try:
+            await context.bot.send_photo(
+                chat_id=ADMIN_CHAT_ID,
+                photo=photo_id,
+                caption=review_message
+            )
+        except Exception as e:
+            logging.error(f"Error sending review photo: {e}")
+            
+    else:
+        # Если только текст
+        review_text = update.message.text
+        
+        # Отправляем админам
+        review_message = f"""
+⭐ Новый отзыв!
+
+👤 От: @{username} ({user_id})
+📝 Текст: {review_text}
+        """
+        
+        try:
+            await context.bot.send_message(
+                chat_id=ADMIN_CHAT_ID,
+                text=review_message
+            )
+        except Exception as e:
+            logging.error(f"Error sending review text: {e}")
+    
+    # Благодарим пользователя
+    await update.message.reply_text(
+        "🙏 Спасибо за ваш отзыв! Это очень важно для нас!\n"
+        "Если у вас будут еще вопросы - обращайтесь!",
+        reply_markup=None
+    )
+    
+    # Убираем флаг ожидания отзыва
+    if user_id in context.bot_data:
+        context.bot_data[user_id]['waiting_review'] = False
+    
+    return ConversationHandler.END
 
 # Обработчик отклонения перевода админом
 async def reject_transfer(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -194,13 +276,23 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
     return ConversationHandler.END
 
-# Основная функция
-def main():
+# Создаем Flask app для Render
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "🤖 Telegram Bot is running!"
+
+@app.route('/health')
+def health():
+    return "✅ Bot is healthy!"
+
+def run_bot():
     # Создаем приложение
     application = Application.builder().token(API_TOKEN).build()
     
-    # Обработчик диалога
-    conv_handler = ConversationHandler(
+    # Обработчик диалога для покупки
+    conv_handler_purchase = ConversationHandler(
         entry_points=[MessageHandler(filters.Regex("^Проверить статус покупки$"), check_purchase_status)],
         states={
             WAITING_FOR_SCREENSHOT: [
@@ -211,45 +303,20 @@ def main():
                 MessageHandler(filters.TEXT & ~filters.COMMAND, process_account_id)
             ]
         },
-        fallbacks=[CommandHandler("cancel", cancel)]
+        fallbacks=[CommandHandler("cancel", cancel)],
+        name="purchase_conversation"
     )
     
-    # Добавляем обработчики
-    application.add_handler(CommandHandler("start", cmd_start))
-    application.add_handler(CallbackQueryHandler(process_product_selection, pattern="^product_"))
-    application.add_handler(CallbackQueryHandler(confirm_transfer, pattern="^confirm_"))
-    application.add_handler(CallbackQueryHandler(reject_transfer, pattern="^reject_"))
-    application.add_handler(conv_handler)
-    
-    # Запускаем бота
-    print("🤖 Бот запущен!")
-    application.run_polling()
-
-# Создаем простой веб-сервер для Render
-# Создаем Flask app для Render
-app = Flask(__name__)
-
-@app.route('/')
-def home():
-    return "🤖 Bot is running!"
-
-def run_bot():
-    # Создаем приложение
-    application = Application.builder().token(API_TOKEN).build()
-    
-    # Обработчик диалога
-    conv_handler = ConversationHandler(
-        entry_points=[MessageHandler(filters.Regex("^Проверить статус покупки$"), check_purchase_status)],
+    # Обработчик диалога для отзывов
+    conv_handler_review = ConversationHandler(
+        entry_points=[MessageHandler(filters.Regex("^Оставить отзыв$"), request_review)],
         states={
-            WAITING_FOR_SCREENSHOT: [
-                MessageHandler(filters.PHOTO & filters.CAPTION, process_screenshot),
-                MessageHandler(filters.PHOTO & ~filters.CAPTion, lambda u, c: u.message.reply_text("Пожалуйста, отправьте скриншот с текстом (описанием или комментарием к фото):"))
-            ],
-            WAITING_FOR_ACCOUNT_ID: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, process_account_id)
+            WAITING_FOR_REVIEW: [
+                MessageHandler(filters.TEXT | filters.PHOTO, process_review)
             ]
         },
-        fallbacks=[CommandHandler("cancel", cancel)]
+        fallbacks=[CommandHandler("cancel", cancel)],
+        name="review_conversation"
     )
     
     # Добавляем обработчики
@@ -257,7 +324,8 @@ def run_bot():
     application.add_handler(CallbackQueryHandler(process_product_selection, pattern="^product_"))
     application.add_handler(CallbackQueryHandler(confirm_transfer, pattern="^confirm_"))
     application.add_handler(CallbackQueryHandler(reject_transfer, pattern="^reject_"))
-    application.add_handler(conv_handler)
+    application.add_handler(conv_handler_purchase)
+    application.add_handler(conv_handler_review)
     
     # Запускаем бота
     print("🤖 Бот запущен!")
@@ -266,6 +334,12 @@ def run_bot():
 if __name__ == '__main__':
     # Запускаем бот в отдельном потоке
     bot_thread = threading.Thread(target=run_bot)
+    bot_thread.daemon = True
+    bot_thread.start()
+    
+    # Запускаем Flask для Render
+    port = int(os.environ.get('PORT', 10000))
+    app.run(host='0.0.0.0', port=port)eading.Thread(target=run_bot)
     bot_thread.daemon = True
     bot_thread.start()
     
