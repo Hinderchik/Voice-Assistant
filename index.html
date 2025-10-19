@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BPMshopSGH - Магазин голды BLOCKPOST</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- CloudPayments Widget -->
+    <script src="https://widget.cloudpayments.ru/bundles/cloudpayments"></script>
+</head>
+<body>
+    <!-- Header -->
+    <header>
+        <div class="container">
+            <div class="header-content">
+                <div class="logo">
+                    <i class="fas fa-coins"></i>
+                    <div class="logo-text">BPM<span>shopSGH</span></div>
+                </div>
+                <nav>
+                    <ul>
+                        <li><a href="#home">Главная</a></li>
+                        <li><a href="#products">Продукты</a></li>
+                        <li><a href="#support">Поддержка</a></li>
+                    </ul>
+                </nav>
+                <div class="auth-buttons">
+                    <span id="user-id-display" style="color: white; display: none;"></span>
+                    <button id="login-btn" class="btn btn-outline">Ввести ID</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Модальное окно для ввода ID -->
+    <div id="login-modal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h3>Введите ваш ID в BLOCKPOST</h3>
+            <p>Ваш уникальный идентификатор в игре (можно найти в профиле)</p>
+            <input type="text" id="user-id-input" placeholder="Например: 123456789" maxlength="20">
+            <button id="confirm-id-btn" class="btn btn-primary">Подтвердить ID</button>
+        </div>
+    </div>
+
+    <!-- Страница оплаты -->
+    <div id="payment-page" class="page" style="display: none;">
+        <div class="container">
+            <div class="payment-container">
+                <button id="back-to-shop" class="btn btn-outline" style="margin-bottom: 20px;">
+                    <i class="fas fa-arrow-left"></i> Назад в магазин
+                </button>
+                
+                <div class="payment-card">
+                    <h2>Оформление заказа</h2>
+                    <div id="order-summary"></div>
+                    
+                    <div class="payment-methods">
+                        <h3>Выберите способ оплаты:</h3>
+                        
+                        <!-- CloudPayments - банковские карты -->
+                        <div class="method-card active" data-method="cloudpayments">
+                            <i class="fas fa-credit-card"></i>
+                            <div>
+                                <span>Банковская карта</span>
+                                <small>Visa, Mastercard, МИР, UnionPay</small>
+                            </div>
+                        </div>
+
+                        <!-- CloudPayments - СБП -->
+                        <div class="method-card" data-method="cloudpayments-sbp">
+                            <i class="fas fa-mobile-alt"></i>
+                            <div>
+                                <span>СБП (Система быстрых платежей)</span>
+                                <small>Оплата через приложение банка</small>
+                            </div>
+                        </div>
+
+                        <!-- Криптовалюты через NowPayments -->
+                        <div class="method-card" data-method="crypto">
+                            <i class="fab fa-bitcoin"></i>
+                            <div>
+                                <span>Криптовалюты</span>
+                                <small>BTC, ETH, USDT, USDC</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Контейнер для выбранного метода оплаты -->
+                    <div id="payment-method-container">
+                        <!-- Контент будет подгружаться динамически -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Страница успешной оплаты -->
+    <div id="success-page" class="page" style="display: none;">
+        <div class="container">
+            <div class="payment-status status-success">
+                <i class="fas fa-check-circle"></i>
+                <h2>Оплата прошла успешно!</h2>
+                <p>Ваш заказ обрабатывается. Голда будет зачислена в течение 5 минут.</p>
+                <div class="order-details" id="success-order-details"></div>
+                <div id="payment-receipt"></div>
+                <button onclick="showMainPage()" class="btn btn-primary">Вернуться в магазин</button>
+            </div>
+        </div>
+    </div>
+    <!-- Добавьте эту секцию после success-page -->
+<div id="delivery-page" class="page" style="display: none;">
+    <div class="container">
+        <div class="payment-card">
+            <div id="delivery-details">
+                <!-- Контент будет загружен динамически -->
+            </div>
+        </div>
+    </div>
+</div>
+
+    <!-- Основная страница -->
+    <div id="main-page">
+        <!-- Hero Section -->
+        <section class="hero" id="home">
+            <div class="container">
+                <h1 class="fade-in">Купи голду для BLOCKPOST Mobile</h1>
+                <p class="fade-in">Официальные поставки по самым низким ценам на рынке! Быстрая доставка, гарантия качества и круглосуточная поддержка.</p>
+                <div class="hero-buttons">
+                    <a href="#products" class="btn btn-primary btn-lg">Купить сейчас</a>
+                    <a href="#support" class="btn btn-outline btn-lg">Поддержка</a>
+                </div>
+            </div>
+        </section>
+
+        <!-- Features Section -->
+        <section class="features">
+            <div class="container">
+                <div class="section-title">
+                    <h2>Почему выбирают BPMshopSGH</h2>
+                    <p>Мы предлагаем лучшие условия для покупки игровой валюты BLOCKPOST Mobile</p>
+                </div>
+                <div class="features-grid">
+                    <div class="feature-card fade-in">
+                        <div class="feature-icon">
+                            <i class="fas fa-bolt"></i>
+                        </div>
+                        <h3>Мгновенная доставка</h3>
+                        <p>Получите голду в течение 5 минут после оплаты. Автоматическая система доставки 24/7.</p>
+                    </div>
+                    <div class="feature-card fade-in">
+                        <div class="feature-icon">
+                            <i class="fas fa-shield-alt"></i>
+                        </div>
+                        <h3>Безопасные сделки</h3>
+                        <p>Все операции защищены, официальные методы пополнения. Гарантия возврата средств.</p>
+                    </div>
+                    <div class="feature-card fade-in">
+                        <div class="feature-icon">
+                            <i class="fas fa-credit-card"></i>
+                        </div>
+                        <h3>Надежные платежи</h3>
+                        <p>Оплата через защищенные платежные системы CloudPayments.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Products Section -->
+        <section class="products" id="products">
+            <div class="container">
+                <div class="section-title">
+                    <h2>Наши предложения</h2>
+                    <p>Выберите подходящий пакет голды для BLOCKPOST Mobile</p>
+                </div>
+                <div class="products-grid">
+                    <!-- Products will be loaded by JavaScript -->
+                </div>
+            </div>
+        </section>
+
+        <!-- Support Section -->
+        <section class="support" id="support">
+            <div class="container">
+                <div class="section-title">
+                    <h2>Поддержка через Telegram</h2>
+                    <p>Наша команда всегда на связи для помощи и консультаций</p>
+                </div>
+                <div class="support-container">
+                    <div class="support-info">
+                        <h3>Свяжитесь с нами через Telegram-бота</h3>
+                        <p>Мы интегрировали Telegram-бота прямо на сайт, чтобы вы могли быстро получить помощь без перехода в мессенджер.</p>
+                        <ul class="support-features">
+                            <li><i class="fas fa-check-circle"></i> Ответ в течение 5 минут</li>
+                            <li><i class="fas fa-check-circle"></i> Круглосуточная поддержка</li>
+                            <li><i class="fas fa-check-circle"></i> Помощь с покупкой и доставкой</li>
+                            <li><i class="fas fa-check-circle"></i> Консультация по любым вопросам</li>
+                        </ul>
+                    </div>
+                    <div class="chat-widget fade-in">
+                        <div class="chat-header">
+                            <i class="fab fa-telegram"></i>
+                            <span>Поддержка BPMshopSGH</span>
+                        </div>
+                        <div class="chat-body" id="chat-body">
+                            <div class="message message-support">
+                                Здравствуйте! Чем могу помочь?
+                            </div>
+                        </div>
+                        <div class="chat-footer">
+                            <input type="text" class="chat-input" placeholder="Введите ваше сообщение..." id="user-input">
+                            <button class="chat-send" id="send-btn">
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer>
+            <div class="container">
+                <div class="footer-content">
+                    <div class="footer-column">
+                        <h3>BPMshopSGH</h3>
+                        <p>Официальный партнер по продаже голды для BLOCKPOST Mobile. Безопасные сделки, низкие цены и быстрая доставка.</p>
+                    </div>
+                    <div class="footer-column">
+                        <h3>Ссылки</h3>
+                        <ul class="footer-links">
+                            <li><a href="#home">Главная</a></li>
+                            <li><a href="#products">Продукты</a></li>
+                            <li><a href="#support">Поддержка</a></li>
+                        </ul>
+                    </div>
+                    <div class="footer-column">
+                        <h3>Контакты</h3>
+                        <ul class="footer-links">
+                            <li><a href="https://t.me/your_support" target="_blank"><i class="fab fa-telegram"></i> Telegram поддержка</a></li>
+                            <li><a href="mailto:support@bpm-shop.ru"><i class="fas fa-envelope"></i> Email</a></li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="footer-bottom">
+                    <p>&copy; 2025 BPMshopSGH. Все права защищены.</p>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
