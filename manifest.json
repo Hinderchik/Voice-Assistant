@@ -1,0 +1,12 @@
+{
+  "background_color": "#ffffff",
+  "dir": "ltr",
+  "display": "standalone",
+  "name": "bpmshopsgh",
+  "orientation": "any",
+  "scope": "/",
+  "short_name": "bpmshopsgh",
+  "start_url": "https://bpmshopsgh.vercel.app",
+  "theme_color": "#ffffff",
+  "id": "1"
+}
