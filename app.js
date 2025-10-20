@@ -19,37 +19,50 @@ const PAYMENT_CONFIG = {
 // Система сессий
 let userSessionId = '';
 let userGameId = '';
+let userAccountId = '';
 let currentOrder = null;
 let currentPaymentMethod = 'cloudpayments';
 let currentOrderId = '';
+let currentTheme = 'light';
+let processedMessages = new Set();
 
 // Данные продуктов
 const products = [
     {
         id: 1, name: "50 GOLD", price: "70 ₽", priceValue: 70,
-        features: ["50 голды для BLOCKPOST", "Мгновенная доставка", "Официальный метод пополнения", "Поддержка 24/7"]
+        features: ["50 голды для BLOCKPOST", "Мгновенная доставка", "Официальный метод пополнения", "Поддержка 24/7"],
+        bgClass: "product-bg-1"
     },
     {
         id: 2, name: "165 GOLD", price: "166 ₽", priceValue: 166,
-        features: ["165 голды для BLOCKPOST", "Мгновенная доставка", "Официальный метод пополнения", "Поддержка 24/7"]
+        features: ["165 голды для BLOCKPOST", "Мгновенная доставка", "Официальный метод пополнения", "Поддержка 24/7"],
+        bgClass: "product-bg-2"
     },
     {
         id: 3, name: "625 GOLD", price: "550 ₽", priceValue: 550,
-        features: ["625 голды для BLOCKPOST", "Мгновенная доставка", "Официальный метод пополнения", "Поддержка 24/7"]
+        features: ["625 голды для BLOCKPOST", "Мгновенная доставка", "Официальный метод пополнения", "Поддержка 24/7"],
+        bgClass: "product-bg-3"
     },
     {
         id: 4, name: "1625 GOLD", price: "1340 ₽", priceValue: 1340,
-        features: ["1625 голды для BLOCKPOST", "Мгновенная доставка", "Официальный метод пополнения", "Приоритетная поддержка"]
+        features: ["1625 голды для BLOCKPOST", "Мгновенная доставка", "Официальный метод пополнения", "Приоритетная поддержка"],
+        bgClass: "product-bg-4"
     },
     {
         id: 5, name: "6750 GOLD", price: "5280 ₽", priceValue: 5280,
-        features: ["6750 голды для BLOCKPOST", "Мгновенная доставка", "Официальный метод пополнения", "Приоритетная поддержка", "Бонус +5% голды"]
+        features: ["6750 голды для BLOCKPOST", "Мгновенная доставка", "Официальный метод пополнения", "Приоритетная поддержка", "Бонус +5% голды"],
+        bgClass: "product-bg-5"
     }
 ];
 
 // Генератор ID сессии
 function generateSessionId() {
     return 'user_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
+}
+
+// Генератор ID аккаунта
+function generateAccountId() {
+    return Math.floor(1000 + Math.random() * 9000);
 }
 
 // Инициализация приложения
@@ -59,29 +72,75 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function initializeApp() {
-    processedMessages.clear();
+    // Загрузка темы
+    loadTheme();
+    
+    // Инициализация сессии
     userSessionId = generateSessionId();
     const savedSession = localStorage.getItem('bp_user_session');
     const savedGameId = localStorage.getItem('bp_user_game_id');
+    const savedAccountId = localStorage.getItem('bp_user_account_id');
     
     if (savedSession) userSessionId = savedSession;
     if (savedGameId) userGameId = savedGameId;
+    if (savedAccountId) userAccountId = savedAccountId;
+    else {
+        userAccountId = generateAccountId();
+        localStorage.setItem('bp_user_account_id', userAccountId);
+    }
     
     localStorage.setItem('bp_user_session', userSessionId);
     
-    console.log('Session:', userSessionId, 'Game ID:', userGameId);
+    console.log('Session:', userSessionId, 'Game ID:', userGameId, 'Account ID:', userAccountId);
     
     loadProducts();
     initModal();
     initPaymentPage();
     initChat();
     initAnimations();
+    initThemeToggle();
     checkBotConfig();
     
     setInterval(checkForOperatorReplies, 8000);
     setInterval(checkDeliveryStatus, 15000);
     
     checkPaymentReturn();
+}
+
+// Инициализация переключателя темы
+function initThemeToggle() {
+    const themeToggle = document.getElementById('theme-toggle');
+    if (themeToggle) {
+        themeToggle.addEventListener('click', toggleTheme);
+        updateThemeIcon();
+    }
+}
+
+function toggleTheme() {
+    currentTheme = currentTheme === 'light' ? 'dark' : 'light';
+    document.body.classList.toggle('dark-theme', currentTheme === 'dark');
+    localStorage.setItem('bp_theme', currentTheme);
+    updateThemeIcon();
+}
+
+function loadTheme() {
+    const savedTheme = localStorage.getItem('bp_theme') || 'light';
+    currentTheme = savedTheme;
+    document.body.classList.toggle('dark-theme', currentTheme === 'dark');
+    updateThemeIcon();
+}
+
+// Обновление иконки темы
+function updateThemeIcon() {
+    const themeToggle = document.getElementById('theme-toggle');
+    if (themeToggle) {
+        const icon = themeToggle.querySelector('i');
+        if (currentTheme === 'dark') {
+            icon.className = 'fas fa-sun';
+        } else {
+            icon.className = 'fas fa-moon';
+        }
+    }
 }
 
 // Инициализация модального окна
@@ -260,7 +319,9 @@ function loadProducts() {
         });
         
         productCard.innerHTML = `
-            <div class="product-header"><h3>${product.name}</h3></div>
+            <div class="product-header ${product.bgClass}">
+                <h3>${product.name}</h3>
+            </div>
             <div class="product-body">
                 <div class="product-price">${product.price}</div>
                 <ul class="product-features">${featuresHTML}</ul>
@@ -315,6 +376,10 @@ function showPaymentPage() {
                 <div class="order-item">
                     <span>Ваш ID:</span>
                     <span>${userGameId}</span>
+                </div>
+                <div class="order-item">
+                    <span>Аккаунт:</span>
+                    <span>#${userAccountId}</span>
                 </div>
                 <div class="order-item order-total">
                     <span>Итого к оплате:</span>
@@ -374,6 +439,7 @@ function processCloudPaymentsCard() {
                 orderId: currentOrderId,
                 product: currentOrder.name,
                 userId: userGameId,
+                accountId: userAccountId,
                 sessionId: userSessionId,
                 shop: PAYMENT_CONFIG.SHOP_NAME
             }
@@ -421,6 +487,7 @@ function processCloudPaymentsSBP() {
                 orderId: orderId,
                 product: currentOrder.name,
                 userId: userGameId,
+                accountId: userAccountId,
                 sessionId: userSessionId,
                 shop: PAYMENT_CONFIG.SHOP_NAME,
                 paymentMethod: 'sbp'
@@ -560,692 +627,455 @@ function handleSuccessfulPayment(payment, method) {
     showDeliveryPage(paymentData);
 }
 
-// Страница ожидания доставки
+// Сохранение данных заказа
+function saveOrderData(orderId, data) {
+    const orders = JSON.parse(localStorage.getItem('bp_orders') || '{}');
+    orders[orderId] = {
+        ...data,
+        product: currentOrder.name,
+        userId: userGameId,
+        accountId: userAccountId,
+        sessionId: userSessionId
+    };
+    localStorage.setItem('bp_orders', JSON.stringify(orders));
+}
+
+// Отправка уведомления о платеже
+function sendPaymentNotification(paymentData) {
+    const message = `✅ Новая оплата!
+Заказ: ${currentOrder.name}
+Сумма: ${paymentData.amount} ${paymentData.currency}
+ID пользователя: ${userGameId}
+Аккаунт: #${userAccountId}
+Метод: ${paymentData.method}
+Order ID: ${paymentData.orderId}`;
+
+    sendTelegramMessage(message);
+}
+
+// Отправка уведомления о ручном платеже
+function sendManualPaymentNotification(paymentData) {
+    const message = `⏳ Ожидание ручной оплаты
+Заказ: ${currentOrder.name}
+Сумма: ${paymentData.amount} ${paymentData.currency}
+ID пользователя: ${userGameId}
+Аккаунт: #${userAccountId}
+Order ID: ${paymentData.orderId}`;
+
+    sendTelegramMessage(message);
+}
+
+// Отправка сообщения в Telegram
+function sendTelegramMessage(text) {
+    if (!BOT_CONFIG.BOT_TOKEN || BOT_CONFIG.BOT_TOKEN.includes('your_')) {
+        console.log('Telegram бот не настроен. Сообщение:', text);
+        return;
+    }
+
+    const url = `https://api.telegram.org/bot${BOT_CONFIG.BOT_TOKEN}/sendMessage`;
+    const params = {
+        chat_id: BOT_CONFIG.CHAT_ID,
+        text: text,
+        parse_mode: 'HTML'
+    };
+
+    fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(params)
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log('Telegram сообщение отправлено:', data);
+    })
+    .catch(error => {
+        console.error('Ошибка отправки в Telegram:', error);
+    });
+}
+
+// Показать страницу доставки
 function showDeliveryPage(paymentData) {
     const mainPage = document.getElementById('main-page');
     const paymentPage = document.getElementById('payment-page');
     const successPage = document.getElementById('success-page');
     const deliveryPage = document.getElementById('delivery-page');
     
-    mainPage.style.display = 'none';
-    paymentPage.style.display = 'none';
-    successPage.style.display = 'none';
-    deliveryPage.style.display = 'block';
+    if (mainPage) mainPage.style.display = 'none';
+    if (paymentPage) paymentPage.style.display = 'none';
+    if (successPage) successPage.style.display = 'none';
+    if (deliveryPage) deliveryPage.style.display = 'block';
+    
+    window.scrollTo(0, 0);
     
     const deliveryDetails = document.getElementById('delivery-details');
-    if (deliveryDetails && currentOrder) {
+    if (deliveryDetails) {
         deliveryDetails.innerHTML = `
             <div class="delivery-status">
-                <div class="status-pending">
-                    <i class="fas fa-truck-loading"></i>
-                    <h3>Ожидайте доставку голды</h3>
-                </div>
-                
+                <h2>Обработка вашего заказа</h2>
                 <div class="delivery-info">
                     <div class="info-item">
-                        <strong>Заказ:</strong>
+                        <span>Товар:</span>
                         <span>${currentOrder.name}</span>
                     </div>
                     <div class="info-item">
-                        <strong>Ваш ID:</strong>
+                        <span>ID игры:</span>
                         <span>${userGameId}</span>
                     </div>
                     <div class="info-item">
-                        <strong>Номер заказа:</strong>
-                        <span>${paymentData.orderId}</span>
+                        <span>Аккаунт:</span>
+                        <span>#${userAccountId}</span>
                     </div>
                     <div class="info-item">
-                        <strong>Статус:</strong>
+                        <span>Сумма:</span>
+                        <span>${currentOrder.price}</span>
+                    </div>
+                    <div class="info-item">
+                        <span>Статус:</span>
                         <span class="status-badge waiting">Ожидает доставки</span>
                     </div>
                 </div>
-
-                <div class="delivery-instructions">
-                    <h4>Что происходит сейчас:</h4>
-                    <ol>
-                        <li>✅ Оплата получена</li>
-                        <li>🔄 Оператор получил уведомление</li>
-                        <li>⏳ Ожидайте зачисления голды на ID: ${userGameId}</li>
-                        <li>✅ Вы получите уведомление о доставке</li>
-                    </ol>
-                </div>
-
+                
                 <div class="delivery-timer">
                     <i class="fas fa-clock"></i>
-                    <span>Обычное время доставки: <strong>1-5 минут</strong></span>
+                    <span>Доставка обычно занимает 1-5 минут</span>
                 </div>
-
+                
+                <div class="delivery-instructions">
+                    <h3>Что происходит сейчас:</h3>
+                    <ol>
+                        <li>Ваш платеж подтвержден</li>
+                        <li>Заказ передан в систему доставки</li>
+                        <li>Голда будет зачислена на ваш аккаунт</li>
+                        <li>Вы получите уведомление о завершении</li>
+                    </ol>
+                </div>
+                
                 <div class="support-contact">
-                    <p>Если прошло более 10 минут, свяжитесь с поддержкой:</p>
-                    <button class="btn btn-outline" onclick="openSupportChat()">
-                        <i class="fas fa-headset"></i> Написать в поддержку
-                    </button>
+                    <p>Если доставка задерживается, обратитесь в поддержку и укажите номер аккаунта: <strong>#${userAccountId}</strong></p>
                 </div>
             </div>
         `;
     }
-    
-    startDeliveryStatusCheck();
-}
-
-// Открыть чат поддержки
-function openSupportChat() {
-    const chatInput = document.getElementById('user-input');
-    if (chatInput) {
-        chatInput.value = `Заказ ${currentOrderId} - проверьте доставку голды на ID: ${userGameId}`;
-        document.getElementById('send-btn').click();
-    }
-}
-
-// Отправка уведомления оператору о новом заказе
-// Отправка уведомления оператору о новом заказе (УЛУЧШЕННАЯ)
-// УПРОЩЕННОЕ уведомление о новом заказе
-function sendPaymentNotification(paymentData) {
-    if (!BOT_CONFIG.BOT_TOKEN) return;
-
-    const message = `🛒 НОВЫЙ ЗАКАЗ
-👤 ID: ${userGameId} 
-🎮 ${currentOrder.name}
-💰 ${currentOrder.price}
-📋 ${paymentData.orderId}
-🔗 ${userSessionId}
-
-✅ Оплачено
-⏰ ${new Date(paymentData.timestamp).toLocaleString()}
-
-Команды:
-/delivered ${paymentData.orderId}|${userSessionId}
-/cancel ${paymentData.orderId}|${userSessionId}|причина
-/ask ${userSessionId}|текст`;
-
-    const url = 'https://api.telegram.org/bot' + BOT_CONFIG.BOT_TOKEN + '/sendMessage';
-    const data = {
-        chat_id: BOT_CONFIG.CHAT_ID,
-        text: message,
-        parse_mode: "HTML"
-    };
-    
-    fetch(url, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data)
-    }).catch(error => console.error('Error sending payment notification:', error));
-}
-
-// Обработка callback-запросов от кнопок
-function checkCallbacks() {
-    if (!BOT_CONFIG.BOT_TOKEN) return;
-    
-    const url = `https://api.telegram.org/bot${BOT_CONFIG.BOT_TOKEN}/getUpdates?offset=${getLastUpdateId() + 1}`;
-    
-    fetch(url)
-        .then(response => response.json())
-        .then(data => {
-            if (data.ok && data.result) {
-                data.result.forEach(update => {
-                    setLastUpdateId(update.update_id);
-                    
-                    // Обработка callback-запросов
-                    if (update.callback_query) {
-                        const callbackData = update.callback_query.data;
-                        if (callbackData.startsWith('reply_')) {
-                            const targetSessionId = callbackData.substring(6);
-                            if (targetSessionId === userSessionId) {
-                                addChatMessage('👨‍💼 Оператор хочет вам ответить. Напишите ваш вопрос.', false);
-                            }
-                        }
-                    }
-                });
-            }
-        })
-        .catch(error => console.error('Error checking callbacks:', error));
-}
-
-// Добавьте этот вызов в initializeApp()
-setInterval(checkCallbacks, 3000);
-
-// Отправка уведомления о ручной оплате
-function sendManualPaymentNotification(paymentData) {
-    if (!BOT_CONFIG.BOT_TOKEN) return;
-
-    const message = `⏳ ОЖИДАНИЕ РУЧНОЙ ОПЛАТЫ BPMshopSGH
-
-👤 ID игрока: ${userGameId}
-🎮 Продукт: ${currentOrder.name}
-💰 Сумма: ${currentOrder.price}
-📋 Номер заказа: ${paymentData.orderId}
-💳 Метод оплаты: Перевод на карту
-
-🔍 Статус: Ожидание подтверждения
-⏰ Время: ${new Date(paymentData.timestamp).toLocaleString()}
-💳 Реквизиты: ${PAYMENT_CONFIG.MANUAL_PAYMENT_DETAILS.card_number}
-
-⚠️ ТРЕБУЕТСЯ ПОДТВЕРЖДЕНИЕ ОПЕРАТОРА`;
-
-    sendTelegramMessage(message);
-}
-
-// Сохранение данных заказа
-function saveOrderData(orderId, paymentData) {
-    const orderData = {
-        orderId: orderId,
-        product: currentOrder,
-        userGameId: userGameId,
-        payment: paymentData,
-        sessionId: userSessionId,
-        status: 'paid',
-        timestamp: new Date().toISOString(),
-        deliveryStatus: 'waiting'
-    };
-    
-    localStorage.setItem('current_order', JSON.stringify(orderData));
-    localStorage.setItem('order_' + orderId, JSON.stringify(orderData));
-    
-    const orders = JSON.parse(localStorage.getItem('bp_orders') || '[]');
-    orders.push(orderData);
-    localStorage.setItem('bp_orders', JSON.stringify(orders));
 }
 
 // Проверка статуса доставки
 function checkDeliveryStatus() {
-    if (!currentOrderId) return;
-    
-    const savedOrder = localStorage.getItem('order_' + currentOrderId);
-    if (!savedOrder) return;
-    
-    const orderData = JSON.parse(savedOrder);
-    
-    if (orderData.deliveryStatus === 'delivered') {
-        showDeliverySuccessPage(orderData);
-    } else if (orderData.deliveryStatus === 'cancelled') {
-        showDeliveryCancelledPage(orderData);
-    }
-}
-
-// Запуск проверки статуса доставки
-function startDeliveryStatusCheck() {
-    const checkInterval = setInterval(() => {
-        if (!currentOrderId) {
-            clearInterval(checkInterval);
-            return;
-        }
-        
-        const savedOrder = localStorage.getItem('order_' + currentOrderId);
-        if (!savedOrder) {
-            clearInterval(checkInterval);
-            return;
-        }
-        
-        const orderData = JSON.parse(savedOrder);
-        
-        if (orderData.deliveryStatus === 'delivered') {
-            clearInterval(checkInterval);
-            showDeliverySuccessPage(orderData);
-        } else if (orderData.deliveryStatus === 'cancelled') {
-            clearInterval(checkInterval);
-            showDeliveryCancelledPage(orderData);
-        }
-        
-        const orderTime = new Date(orderData.timestamp).getTime();
-        const currentTime = new Date().getTime();
-        if (currentTime - orderTime > 30 * 60 * 1000) {
-            clearInterval(checkInterval);
-        }
-    }, 5000);
-}
-
-// Страница успешной доставки
-function showDeliverySuccessPage(orderData) {
-    const deliveryPage = document.getElementById('delivery-page');
-    const successPage = document.getElementById('success-page');
-    
-    deliveryPage.style.display = 'none';
-    successPage.style.display = 'block';
-    
-    const successDetails = document.getElementById('success-order-details');
-    const receipt = document.getElementById('payment-receipt');
-    
-    if (successDetails && currentOrder) {
-        successDetails.innerHTML = `
-            <div class="delivery-success">
-                <div class="status-success">
-                    <i class="fas fa-gift"></i>
-                    <h3>Голда доставлена!</h3>
-                </div>
-                
-                <div class="success-info">
-                    <div class="info-item">
-                        <strong>Заказ:</strong>
-                        <span>${currentOrder.name}</span>
-                    </div>
-                    <div class="info-item">
-                        <strong>Получено на ID:</strong>
-                        <span>${userGameId}</span>
-                    </div>
-                    <div class="info-item">
-                        <strong>Номер заказа:</strong>
-                        <span>${orderData.orderId}</span>
-                    </div>
-                    <div class="info-item">
-                        <strong>Время доставки:</strong>
-                        <span>${new Date().toLocaleString()}</span>
-                    </div>
-                </div>
-
-                <div class="success-message">
-                    <p>✅ <strong>Голда успешно зачислена на ваш аккаунт!</strong></p>
-                    <p>Можете проверять баланс в игре. Приятной игры! 🎮</p>
-                </div>
-
-                <div class="rate-service">
-                    <p>Оцените наш сервис:</p>
-                    <div class="rating-stars">
-                        <span class="star" onclick="rateService(5)">⭐</span>
-                        <span class="star" onclick="rateService(4)">⭐</span>
-                        <span class="star" onclick="rateService(3)">⭐</span>
-                        <span class="star" onclick="rateService(2)">⭐</span>
-                        <span class="star" onclick="rateService(1)">⭐</span>
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-    
-    if (receipt) {
-        receipt.innerHTML = `
-            <div class="receipt-info">
-                <h4>Чек об оплате и доставке</h4>
-                <div class="receipt-details">
-                    <p><strong>Магазин:</strong> ${PAYMENT_CONFIG.SHOP_NAME}</p>
-                    <p><strong>Товар:</strong> ${currentOrder.name}</p>
-                    <p><strong>Сумма:</strong> ${currentOrder.price}</p>
-                    <p><strong>ID заказа:</strong> ${orderData.orderId}</p>
-                    <p><strong>ID игрока:</strong> ${userGameId}</p>
-                    <p><strong>Время оплаты:</strong> ${new Date(orderData.timestamp).toLocaleString()}</p>
-                    <p><strong>Время доставки:</strong> ${new Date().toLocaleString()}</p>
-                    <div class="status-success">
-                        <i class="fas fa-check-circle"></i>
-                        <span>Заказ выполнен успешно</span>
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-    
-    sendDeliveryConfirmation(orderData);
-}
-
-// Страница отмены доставки
-function showDeliveryCancelledPage(orderData) {
-    const deliveryPage = document.getElementById('delivery-page');
-    const successPage = document.getElementById('success-page');
-    
-    deliveryPage.style.display = 'none';
-    successPage.style.display = 'block';
-    
-    const successDetails = document.getElementById('success-order-details');
-    const receipt = document.getElementById('payment-receipt');
-    
-    if (successDetails) {
-        successDetails.innerHTML = `
-            <div class="delivery-cancelled">
-                <div class="status-error">
-                    <i class="fas fa-times-circle"></i>
-                    <h3>Заказ отменен</h3>
-                </div>
-                
-                <div class="cancelled-info">
-                    <p>К сожалению, ваш заказ был отменен оператором.</p>
-                    <p><strong>Причина:</strong> ${orderData.cancelReason || 'Не указана'}</p>
-                    <p><strong>Номер заказа:</strong> ${orderData.orderId}</p>
-                </div>
-
-                <div class="refund-info">
-                    <p>💰 <strong>Средства будут возвращены на ваш счет в течение 1-3 рабочих дней.</strong></p>
-                    <p>Если возврат не поступил, свяжитесь с поддержкой.</p>
-                </div>
-
-                <div class="support-contact">
-                    <button class="btn btn-outline" onclick="openSupportChat()">
-                        <i class="fas fa-headset"></i> Связаться с поддержкой
-                    </button>
-                </div>
-            </div>
-        `;
-    }
-}
-
-// Отправка подтверждения доставки
-function sendDeliveryConfirmation(orderData) {
-    if (!BOT_CONFIG.BOT_TOKEN) return;
-
-    const message = `✅ ДОСТАВКА ПОДТВЕРЖДЕНА ПОЛЬЗОВАТЕЛЕМ
-
-Заказ: ${orderData.orderId}
-Игрок: ${userGameId}
-Продукт: ${currentOrder.name}
-
-Пользователь подтвердил получение голды!`;
-
-    sendTelegramMessage(message);
-}
-
-// Оценка сервиса
-function rateService(rating) {
-    if (!BOT_CONFIG.BOT_TOKEN) return;
-
-    const message = `⭐ ОЦЕНКА СЕРВИСА: ${rating}/5
-
-Заказ: ${currentOrderId}
-Игрок: ${userGameId}
-Продукт: ${currentOrder.name}
-
-Спасибо за оценку!`;
-
-    sendTelegramMessage(message);
-    
-    alert(`Спасибо за оценку ${rating} ⭐!`);
-}
-
-// Глобальная переменная для хранения обработанных сообщений
-let processedMessages = new Set();
-
-// УМНАЯ проверка ответов от оператора - БЕЗ ДУБЛИРОВАНИЯ
-function checkForOperatorReplies() {
-    if (!BOT_CONFIG.BOT_TOKEN || !userSessionId) return;
-    
-    const url = `https://api.telegram.org/bot${BOT_CONFIG.BOT_TOKEN}/getUpdates?offset=${getLastUpdateId() + 1}&timeout=1`;
-    
-    fetch(url)
-        .then(response => response.json())
-        .then(data => {
-            if (data.ok && data.result && data.result.length > 0) {
-                data.result.forEach(update => {
-                    const updateId = update.update_id;
-                    setLastUpdateId(updateId);
-                    
-                    // Пропускаем если уже обрабатывали это сообщение
-                    if (processedMessages.has(updateId)) {
-                        return;
-                    }
-                    
-                    if (update.message && update.message.text) {
-                        const messageText = update.message.text;
-                        const messageId = update.message.message_id;
-                        
-                        // БЫСТРАЯ ПРОВЕРКА: сообщение должно содержать нашу сессию
-                        if (!messageText.includes(userSessionId)) {
-                            return;
-                        }
-                        
-                        console.log('New message for user:', messageText);
-                        
-                        // Помечаем сообщение как обработанное
-                        processedMessages.add(updateId);
-                        
-                        // Ограничиваем размер Set чтобы не рос бесконечно
-                        if (processedMessages.size > 100) {
-                            const first = processedMessages.values().next().value;
-                            processedMessages.delete(first);
-                        }
-                        
-                        // Обработка команд
-                        if (messageText.startsWith('/delivered ')) {
-                            const parts = messageText.substring(11).split('|');
-                            if (parts.length >= 2 && parts[1].trim() === userSessionId) {
-                                if (!markOrderAsDelivered(parts[0].trim())) {
-                                    addChatMessage('✅ Оператор подтвердил доставку голды! Проверяйте баланс в игре.', false);
-                                }
-                            }
-                        }
-                        else if (messageText.startsWith('/cancel ')) {
-                            const parts = messageText.substring(8).split('|');
-                            if (parts.length >= 3 && parts[1].trim() === userSessionId) {
-                                if (!markOrderAsCancelled(parts[0].trim(), parts[2].trim())) {
-                                    addChatMessage('❌ Оператор отменил заказ. Причина: ' + parts[2].trim(), false);
-                                }
-                            }
-                        }
-                        else if (messageText.startsWith('/ask ')) {
-                            const parts = messageText.substring(5).split('|');
-                            if (parts.length === 2 && parts[0].trim() === userSessionId) {
-                                addChatMessage('👨‍💼 Оператор: ' + parts[1].trim(), false);
-                            }
-                        }
-                    }
-                });
-            }
-        })
-        .catch(error => console.error('Error checking replies:', error));
-}
-
-// Функции для работы с последним update_id
-function getLastUpdateId() {
-    return parseInt(localStorage.getItem('last_update_id') || '0');
-}
-
-function setLastUpdateId(updateId) {
-    localStorage.setItem('last_update_id', updateId.toString());
-}
-
-// Пометить заказ как доставленный
-// Пометить заказ как доставленный (с проверкой дублирования)
-function markOrderAsDelivered(orderId) {
-    const savedOrder = localStorage.getItem('order_' + orderId);
-    if (savedOrder) {
-        const orderData = JSON.parse(savedOrder);
-        
-        // Проверяем, не был ли уже доставлен заказ
-        if (orderData.deliveryStatus === 'delivered') {
-            return true; // Уже доставлен
-        }
-        
-        orderData.deliveryStatus = 'delivered';
-        orderData.deliveredAt = new Date().toISOString();
-        orderData.status = 'delivered';
-        
-        localStorage.setItem('order_' + orderId, JSON.stringify(orderData));
-        localStorage.setItem('current_order', JSON.stringify(orderData));
-        
-        console.log('Order marked as delivered:', orderId);
-        
-        if (currentOrderId === orderId) {
-            showDeliverySuccessPage(orderData);
-        }
-        
-        return false; // Не был доставлен
-    }
-    return true; // Заказ не найден
-}
-
-// Пометить заказ как отмененный (с проверкой дублирования)
-function markOrderAsCancelled(orderId, reason) {
-    const savedOrder = localStorage.getItem('order_' + orderId);
-    if (savedOrder) {
-        const orderData = JSON.parse(savedOrder);
-        
-        // Проверяем, не был ли уже отменен заказ
-        if (orderData.deliveryStatus === 'cancelled') {
-            return true; // Уже отменен
-        }
-        
-        orderData.deliveryStatus = 'cancelled';
-        orderData.status = 'cancelled';
-        orderData.cancelReason = reason;
-        orderData.cancelledAt = new Date().toISOString();
-        
-        localStorage.setItem('order_' + orderId, JSON.stringify(orderData));
-        localStorage.setItem('current_order', JSON.stringify(orderData));
-        
-        console.log('Order marked as cancelled:', orderId);
-        
-        if (currentOrderId === orderId) {
-            showDeliveryCancelledPage(orderData);
-        }
-        
-        return false; // Не был отменен
-    }
-    return true; // Заказ не найден
-}
-
-// Отправка сообщения в Telegram
-function sendTelegramMessage(message) {
-    const url = 'https://api.telegram.org/bot' + BOT_CONFIG.BOT_TOKEN + '/sendMessage';
-    const data = {
-        chat_id: BOT_CONFIG.CHAT_ID,
-        text: message,
-        parse_mode: "HTML"
-    };
-    
-    fetch(url, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data)
-    }).catch(error => console.error('Error sending message:', error));
+    // В реальном приложении здесь был бы запрос к API
+    console.log('Проверка статуса доставки...');
 }
 
 // Инициализация чата
 function initChat() {
-    const chatBody = document.getElementById('chat-body');
-    const userInput = document.getElementById('user-input');
     const sendBtn = document.getElementById('send-btn');
+    const userInput = document.getElementById('user-input');
     
-    if (!chatBody || !userInput || !sendBtn) {
-        console.log('Chat elements not found');
-        return;
+    if (sendBtn && userInput) {
+        sendBtn.addEventListener('click', sendChatMessage);
+        userInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendChatMessage();
+            }
+        });
     }
-    
-    sendBtn.addEventListener('click', function() {
-        const message = userInput.value.trim();
-        if (message) {
-            addChatMessage(message, true);
-            sendToTelegram(message);
-            userInput.value = '';
-        }
-    });
-    
-    userInput.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') {
-            sendBtn.click();
-        }
-    });
-    
-    console.log('Chat initialized');
 }
 
-// Добавление сообщения в чат
-function addChatMessage(text, isUser) {
+// Отправка сообщения в чат
+function sendChatMessage() {
+    const userInput = document.getElementById('user-input');
+    const chatBody = document.getElementById('chat-body');
+    
+    if (!userInput || !chatBody) return;
+    
+    const message = userInput.value.trim();
+    if (!message) return;
+    
+    // Добавляем сообщение пользователя
+    const userMessage = document.createElement('div');
+    userMessage.className = 'message message-user';
+    userMessage.textContent = message;
+    chatBody.appendChild(userMessage);
+    
+    // Очищаем поле ввода
+    userInput.value = '';
+    
+    // Прокручиваем вниз
+    chatBody.scrollTop = chatBody.scrollHeight;
+    
+    // Отправляем в Telegram
+    sendTelegramSupportMessage(message);
+    
+    // Имитируем ответ поддержки
+    setTimeout(() => {
+        const supportMessage = document.createElement('div');
+        supportMessage.className = 'message message-support';
+        supportMessage.textContent = 'Спасибо за ваше сообщение! Оператор свяжется с вами в ближайшее время. Ваш аккаунт: #' + userAccountId;
+        chatBody.appendChild(supportMessage);
+        chatBody.scrollTop = chatBody.scrollHeight;
+    }, 2000);
+}
+
+// Отправка сообщения поддержки в Telegram
+function sendTelegramSupportMessage(message) {
+    const fullMessage = `💬 Новое сообщение из поддержки
+Аккаунт: #${userAccountId}
+ID игры: ${userGameId || 'не указан'}
+Сообщение: ${message}`;
+
+    sendTelegramMessage(fullMessage);
+}
+
+// Проверка ответов оператора
+function checkForOperatorReplies() {
+    // В реальном приложении здесь был бы запрос к API для получения ответов
+    if (!BOT_CONFIG.BOT_TOKEN || BOT_CONFIG.BOT_TOKEN.includes('your_')) return;
+    
+    // Имитация получения ответов от оператора
     const chatBody = document.getElementById('chat-body');
     if (!chatBody) return;
     
-    const messageDiv = document.createElement('div');
-    messageDiv.classList.add('message');
-    messageDiv.classList.add(isUser ? 'message-user' : 'message-support');
-    messageDiv.textContent = text;
+    // Случайный ответ оператора (в реальном приложении это были бы реальные ответы)
+    const responses = [
+        "Мы уже обрабатываем ваш заказ, ожидайте доставки в ближайшее время.",
+        "По вашему вопросу обратитесь к менеджеру в Telegram: @manager_name",
+        "Доставка голды обычно занимает от 1 до 5 минут после оплаты.",
+        "Если у вас возникли проблемы с оплатой, попробуйте другой способ оплаты.",
+        "Ваш заказ уже в обработке, скоро вы получите уведомление."
+    ];
     
-    chatBody.appendChild(messageDiv);
-    chatBody.scrollTop = chatBody.scrollHeight;
+    // Случайно показываем ответ оператора (10% вероятность)
+    if (Math.random() < 0.1) {
+        const randomResponse = responses[Math.floor(Math.random() * responses.length)];
+        const supportMessage = document.createElement('div');
+        supportMessage.className = 'message message-support';
+        supportMessage.textContent = randomResponse;
+        chatBody.appendChild(supportMessage);
+        chatBody.scrollTop = chatBody.scrollHeight;
+    }
 }
 
-// Отправка сообщения в Telegram (чат поддержки)
-// Улучшенная функция отправки сообщений в Telegram
-// УПРОЩЕННАЯ отправка сообщений в Telegram
-function sendToTelegram(message) {
-    if (!BOT_CONFIG.BOT_TOKEN) {
-        addChatMessage('Сообщение сохранено. Настройте Telegram бота.', false);
-        return;
-    }
-    
-    const url = 'https://api.telegram.org/bot' + BOT_CONFIG.BOT_TOKEN + '/sendMessage';
-    const data = {
-        chat_id: BOT_CONFIG.CHAT_ID,
-        text: `👤 [${userSessionId}] ID: ${userGameId || 'не указан'}\n💬 ${message}`,
-        parse_mode: "HTML"
-    };
-    
-    fetch(url, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data)
-    })
-    .then(response => response.json())
-    .then(result => {
-        if (result.ok) {
-            console.log('Message sent to Telegram');
-            addChatMessage('✅ Сообщение отправлено оператору', false);
-        }
-    })
-    .catch(error => {
-        console.error('Error sending message:', error);
+// Инициализация анимаций
+function initAnimations() {
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                entry.target.classList.add('fade-in');
+            }
+        });
+    });
+
+    document.querySelectorAll('.fade-in').forEach((el) => {
+        observer.observe(el);
     });
 }
 
 // Проверка конфигурации бота
 function checkBotConfig() {
-    const chatBody = document.getElementById('chat-body');
-    if (!chatBody) return;
-    
-    if (!BOT_CONFIG.BOT_TOKEN) {
-        addChatMessage('💬 Чат поддержки работает в демо-режиме.', false);
-        return false;
+    if (!BOT_CONFIG.BOT_TOKEN || BOT_CONFIG.BOT_TOKEN.includes('your_')) {
+        console.warn('⚠️ Telegram бот не настроен');
     }
-    
-    addChatMessage('🤖 Telegram бот BPMshopSGH подключен. Вы можете задать вопрос оператору!', false);
-    return true;
 }
 
-// Анимации
-function initAnimations() {
-    const fadeElements = document.querySelectorAll('.fade-in');
-    if (fadeElements.length === 0) return;
-    
-    const fadeInObserver = new IntersectionObserver(function(entries) {
-        entries.forEach(function(entry) {
-            if (entry.isIntersecting) {
-                entry.target.style.opacity = 1;
-                entry.target.style.transform = 'translateY(0)';
-            }
-        });
-    }, { threshold: 0.1 });
-    
-    fadeElements.forEach(function(el) {
-        el.style.opacity = 0;
-        el.style.transform = 'translateY(20px)';
-        el.style.transition = 'opacity 0.8s ease, transform 0.8s ease';
-        fadeInObserver.observe(el);
-    });
-}
-
-// Проверка возврата с оплаты
+// Проверка возврата с платежной системы
 function checkPaymentReturn() {
     const urlParams = new URLSearchParams(window.location.search);
-    const paymentStatus = urlParams.get('payment');
-    const orderId = urlParams.get('order');
-    
-    if (paymentStatus === 'success' && orderId) {
-        const savedOrder = localStorage.getItem('order_' + orderId);
-        if (savedOrder) {
-            const orderData = JSON.parse(savedOrder);
-            currentOrder = orderData.product;
-            userGameId = orderData.userGameId;
-            currentOrderId = orderId;
-            
-            showDeliveryPage(orderData.payment);
-        }
-        
-        window.history.replaceState({}, document.title, window.location.pathname);
+    if (urlParams.has('payment_success')) {
+        showSuccessPage();
     }
 }
 
-// Глобальные функции
+// Показать страницу успеха
+function showSuccessPage() {
+    const mainPage = document.getElementById('main-page');
+    const paymentPage = document.getElementById('payment-page');
+    const successPage = document.getElementById('success-page');
+    const deliveryPage = document.getElementById('delivery-page');
+    
+    if (mainPage) mainPage.style.display = 'none';
+    if (paymentPage) paymentPage.style.display = 'none';
+    if (deliveryPage) deliveryPage.style.display = 'none';
+    if (successPage) successPage.style.display = 'block';
+    
+    window.scrollTo(0, 0);
+    
+    const successOrderDetails = document.getElementById('success-order-details');
+    if (successOrderDetails && currentOrder) {
+        successOrderDetails.innerHTML = `
+            <div class="order-summary">
+                <h3>Детали заказа:</h3>
+                <div class="order-item">
+                    <span>Товар:</span>
+                    <span>${currentOrder.name}</span>
+                </div>
+                <div class="order-item">
+                    <span>Ваш ID:</span>
+                    <span>${userGameId}</span>
+                </div>
+                <div class="order-item">
+                    <span>Аккаунт:</span>
+                    <span>#${userAccountId}</span>
+                </div>
+                <div class="order-item">
+                    <span>Сумма:</span>
+                    <span>${currentOrder.price}</span>
+                </div>
+            </div>
+        `;
+    }
+}
+
+// Показать страницу с деталями доставки
+function showDeliveryDetails(orderId) {
+    const orders = JSON.parse(localStorage.getItem('bp_orders') || '{}');
+    const order = orders[orderId];
+    
+    if (!order) return;
+    
+    const deliveryPage = document.getElementById('delivery-page');
+    const deliveryDetails = document.getElementById('delivery-details');
+    
+    if (deliveryPage && deliveryDetails) {
+        deliveryPage.style.display = 'block';
+        
+        let statusClass = 'waiting';
+        let statusText = 'Ожидает доставки';
+        
+        if (order.status === 'delivered') {
+            statusClass = 'delivered';
+            statusText = 'Доставлено';
+        } else if (order.status === 'cancelled') {
+            statusClass = 'cancelled';
+            statusText = 'Отменено';
+        }
+        
+        deliveryDetails.innerHTML = `
+            <div class="delivery-status">
+                <h2>Статус заказа #${orderId}</h2>
+                <div class="delivery-info">
+                    <div class="info-item">
+                        <span>Товар:</span>
+                        <span>${order.product}</span>
+                    </div>
+                    <div class="info-item">
+                        <span>ID игры:</span>
+                        <span>${order.userId}</span>
+                    </div>
+                    <div class="info-item">
+                        <span>Аккаунт:</span>
+                        <span>#${order.accountId}</span>
+                    </div>
+                    <div class="info-item">
+                        <span>Сумма:</span>
+                        <span>${order.amount} ${order.currency}</span>
+                    </div>
+                    <div class="info-item">
+                        <span>Статус:</span>
+                        <span class="status-badge ${statusClass}">${statusText}</span>
+                    </div>
+                    <div class="info-item">
+                        <span>Время заказа:</span>
+                        <span>${new Date(order.timestamp).toLocaleString()}</span>
+                    </div>
+                </div>
+                
+                ${order.status === 'delivered' ? `
+                    <div class="success-message">
+                        <h3>🎉 Голда успешно доставлена!</h3>
+                        <p>Ваш заказ был выполнен успешно. Голда зачислена на ваш аккаунт в BLOCKPOST.</p>
+                    </div>
+                    <div class="rate-service">
+                        <h3>Оцените наш сервис:</h3>
+                        <div class="rating-stars">
+                            <span class="star" onclick="rateService(5)">⭐</span>
+                            <span class="star" onclick="rateService(4)">⭐</span>
+                            <span class="star" onclick="rateService(3)">⭐</span>
+                            <span class="star" onclick="rateService(2)">⭐</span>
+                            <span class="star" onclick="rateService(1)">⭐</span>
+                        </div>
+                    </div>
+                ` : ''}
+                
+                ${order.status === 'cancelled' ? `
+                    <div class="refund-info">
+                        <h3>❌ Заказ отменен</h3>
+                        <p>Ваш заказ был отменен. Средства будут возвращены в течение 1-3 рабочих дней.</p>
+                    </div>
+                ` : ''}
+                
+                ${order.status === 'waiting' || order.status === 'paid' ? `
+                    <div class="delivery-timer">
+                        <i class="fas fa-clock"></i>
+                        <span>Доставка обычно занимает 1-5 минут</span>
+                    </div>
+                ` : ''}
+                
+                <div class="support-contact">
+                    <p>Если у вас есть вопросы, обратитесь в поддержку и укажите номер аккаунта: <strong>#${order.accountId}</strong></p>
+                </div>
+                
+                <button onclick="showMainPage()" class="btn btn-primary">Вернуться в магазин</button>
+            </div>
+        `;
+    }
+}
+
+// Оценка сервиса
+function rateService(rating) {
+    alert(`Спасибо за оценку ${rating} звезд!`);
+    sendTelegramMessage(`⭐ Оценка сервиса: ${rating}/5 от аккаунта #${userAccountId}`);
+}
+
+// Вспомогательные функции для работы с заказами
+function getUserOrders() {
+    return JSON.parse(localStorage.getItem('bp_orders') || '{}');
+}
+
+function getOrderById(orderId) {
+    const orders = getUserOrders();
+    return orders[orderId];
+}
+
+function updateOrderStatus(orderId, status) {
+    const orders = getUserOrders();
+    if (orders[orderId]) {
+        orders[orderId].status = status;
+        orders[orderId].updatedAt = new Date().toISOString();
+        localStorage.setItem('bp_orders', JSON.stringify(orders));
+        return true;
+    }
+    return false;
+}
+
+// Функция для администратора для отметки доставки
+function markOrderAsDelivered(orderId) {
+    if (updateOrderStatus(orderId, 'delivered')) {
+        console.log(`Заказ ${orderId} отмечен как доставленный`);
+        return true;
+    }
+    return false;
+}
+
+// Функция для администратора для отмены заказа
+function cancelOrder(orderId) {
+    if (updateOrderStatus(orderId, 'cancelled')) {
+        console.log(`Заказ ${orderId} отменен`);
+        return true;
+    }
+    return false;
+}
+
+// Экспорт функций для глобального использования
 window.startOrder = startOrder;
-window.showManualPayment = showManualPayment;
+window.showMainPage = showMainPage;
+window.processCloudPaymentsCard = processCloudPaymentsCard;
+window.processCloudPaymentsSBP = processCloudPaymentsSBP;
+window.processCryptoPayment = processCryptoPayment;
 window.copyToClipboard = copyToClipboard;
-window.openSupportChat = openSupportChat;
+window.handleManualPayment = handleManualPayment;
 window.rateService = rateService;
+window.showDeliveryDetails = showDeliveryDetails;
+window.markOrderAsDelivered = markOrderAsDelivered;
+window.cancelOrder = cancelOrder;
+
+console.log('BPMshopSGH App полностью загружен и готов к работе!');
