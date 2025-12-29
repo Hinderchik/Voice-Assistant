@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>♛ ШАХМАТЫ ОНЛАЙН ♔</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- ВСЕ ОСТАЛЬНЫЕ СТИЛИ В style.css -->
+</head>
+<body>
+    <div class="app-container">
+        <!-- Лобби -->
+        <div class="lobby active" id="lobby">
+            <div class="lobby-header">
+                <h1><i class="fas fa-chess-king"></i> Chess Online</h1>
+                <p>Играйте против реальных игроков</p>
+            </div>
+            
+            <div class="lobby-stats">
+                <div class="stat">
+                    <i class="fas fa-users"></i>
+                    <span id="online-count">0</span> онлайн
+                </div>
+                <div class="stat">
+                    <i class="fas fa-bolt"></i>
+                    <span id="ping">--</span> мс
+                </div>
+                <div class="stat">
+                    <i class="fas fa-chess-board"></i>
+                    <span id="games-count">0</span> игр
+                </div>
+            </div>
+            
+            <div class="game-options">
+                <button class="btn btn-primary" onclick="startQuickGame()">
+                    <i class="fas fa-bolt"></i> Быстрая игра
+                </button>
+                <button class="btn btn-secondary" onclick="createPrivateRoom()">
+                    <i class="fas fa-user-plus"></i> Создать комнату
+                </button>
+                <button class="btn btn-ghost" onclick="joinPrivateRoom()">
+                    <i class="fas fa-sign-in-alt"></i> Присоединиться
+                </button>
+            </div>
+            
+            <!-- Создание комнаты -->
+            <div class="room-creation" id="room-creation" style="display: none;">
+                <h3><i class="fas fa-door-closed"></i> Создание комнаты</h3>
+                <div class="room-code">
+                    <code id="room-code">ABCDEF</code>
+                    <button onclick="copyRoomCode()" class="btn-small">
+                        <i class="fas fa-copy"></i> Копировать
+                    </button>
+                </div>
+                <div class="room-players" id="room-players">
+                    <div class="player" id="room-player-1">
+                        <i class="fas fa-user"></i> Вы
+                    </div>
+                    <div class="player waiting" id="room-player-2">
+                        <i class="fas fa-clock"></i> Ожидание...
+                    </div>
+                </div>
+                <button class="btn btn-success" onclick="startRoomGame()" id="start-game-btn" disabled>
+                    <i class="fas fa-play"></i> Начать игру
+                </button>
+                <button class="btn btn-danger" onclick="closeRoom()">
+                    <i class="fas fa-times"></i> Закрыть комнату
+                </button>
+            </div>
+            
+            <!-- Присоединение к комнате -->
+            <div class="room-join" id="room-join" style="display: none;">
+                <h3><i class="fas fa-sign-in-alt"></i> Присоединение к комнате</h3>
+                <input type="text" id="room-code-input" placeholder="Введите код комнаты (6 символов)" maxlength="6">
+                <div class="button-group">
+                    <button class="btn btn-primary" onclick="joinRoom()">
+                        <i class="fas fa-sign-in-alt"></i> Присоединиться
+                    </button>
+                    <button class="btn btn-secondary" onclick="cancelJoin()">
+                        <i class="fas fa-times"></i> Отмена
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Игровой экран -->
+        <div class="game-screen" id="game-screen" style="display: none;">
+            <div class="game-header">
+                <div class="player-info white">
+                    <div class="player-avatar">
+                        <i class="fas fa-user"></i>
+                    </div>
+                    <div class="player-details">
+                        <div class="player-name" id="white-player-name">Белые</div>
+                        <div class="player-time" id="white-time">10:00</div>
+                    </div>
+                    <div class="player-status" id="white-status"></div>
+                </div>
+                
+                <div class="game-controls">
+                    <button class="btn btn-danger" onclick="resign()">
+                        <i class="fas fa-flag"></i> Сдаться
+                    </button>
+                    <button class="btn btn-secondary" onclick="offerDraw()">
+                        <i class="fas fa-handshake"></i> Ничья
+                    </button>
+                    <button class="btn btn-ghost" onclick="leaveGame()">
+                        <i class="fas fa-sign-out-alt"></i> Выйти
+                    </button>
+                </div>
+                
+                <div class="player-info black">
+                    <div class="player-avatar">
+                        <i class="fas fa-user"></i>
+                    </div>
+                    <div class="player-details">
+                        <div class="player-name" id="black-player-name">Черные</div>
+                        <div class="player-time" id="black-time">10:00</div>
+                    </div>
+                    <div class="player-status" id="black-status"></div>
+                </div>
+            </div>
+            
+            <div class="game-main">
+                <!-- Шахматная доска -->
+                <div class="board-container">
+                    <div class="board-controls">
+                        <button class="btn btn-small" onclick="undoMove()">
+                            <i class="fas fa-undo"></i> Назад
+                        </button>
+                        <button class="btn btn-small" onclick="flipBoard()">
+                            <i class="fas fa-sync-alt"></i> Повернуть
+                        </button>
+                    </div>
+                    <div class="chess-board" id="chess-board">
+                        <!-- Доска создается в game.js -->
+                    </div>
+                    <div class="captured-container">
+                        <div class="captured-pieces" id="white-captured"></div>
+                    </div>
+                </div>
+                
+                <!-- Боковая панель -->
+                <div class="sidebar">
+                    <div class="move-history">
+                        <h4><i class="fas fa-history"></i> История ходов</h4>
+                        <div class="moves-list" id="moves-list"></div>
+                    </div>
+                    
+                    <div class="chat">
+                        <h4><i class="fas fa-comments"></i> Чат</h4>
+                        <div class="chat-messages" id="chat-messages">
+                            <div class="chat-message system">Добро пожаловать в игру!</div>
+                        </div>
+                        <div class="chat-input">
+                            <input type="text" id="chat-input-field" placeholder="Введите сообщение..." onkeypress="if(event.key=='Enter') sendChatMessage()">
+                            <button onclick="sendChatMessage()">
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="captured-container">
+                        <h4><i class="fas fa-skull-crossbones"></i> Взятые фигуры</h4>
+                        <div class="captured-pieces" id="black-captured"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="game-status-bar" id="game-status-bar">
+                <span id="status-message">Создайте или присоединитесь к игре</span>
+            </div>
+        </div>
+        
+        <!-- Модальные окна -->
+        <div id="promotion-modal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <h3><i class="fas fa-crown"></i> Превращение пешки</h3>
+                <p>Выберите фигуру:</p>
+                <div class="promotion-options" id="promotion-options">
+                    <!-- Создается в game.js -->
+                </div>
+                <div class="modal-buttons">
+                    <button class="btn btn-secondary" onclick="hidePromotionModal()">
+                        <i class="fas fa-times"></i> Отмена
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div id="game-over-modal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <h2 id="game-over-title"><i class="fas fa-trophy"></i> Игра окончена!</h2>
+                <p id="game-over-message"></p>
+                <div class="modal-buttons">
+                    <button class="btn btn-primary" onclick="returnToLobby()">
+                        <i class="fas fa-home"></i> В лобби
+                    </button>
+                    <button class="btn btn-success" onclick="rematch()">
+                        <i class="fas fa-redo"></i> Реванш
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="draw-offer-modal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <h3><i class="fas fa-handshake"></i> Предложение ничьей</h3>
+                <p id="draw-offer-text"></p>
+                <div class="modal-buttons">
+                    <button class="btn btn-success" onclick="acceptDraw()">
+                        <i class="fas fa-check"></i> Принять
+                    </button>
+                    <button class="btn btn-danger" onclick="declineDraw()">
+                        <i class="fas fa-times"></i> Отклонить
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Подключаем Pusher -->
+    <script src="https://js.pusher.com/7.2/pusher.min.js"></script>
+    
+    <!-- Подключаем chess.js библиотеку -->
+    <script src="chess.js"></script>
+    
+    <!-- Подключаем наши файлы -->
+    <script src="game.js"></script>
+    <script src="network.js"></script>
+    <script src="ui.js"></script>
+    
+    <script>
+        // Инициализация при загрузке
+        document.addEventListener('DOMContentLoaded', () => {
+            // Предзагрузка фигур
+            const piecesToPreload = ['wp', 'wn', 'wb', 'wr', 'wq', 'wk', 'bp', 'bn', 'bb', 'br', 'bq', 'bk'];
+            piecesToPreload.forEach(piece => {
+                const img = new Image();
+                img.src = `assets/pieces/${piece}.svg`;
+            });
+            
+            // Инициализация UI
+            if (window.UI && window.UI.init) {
+                window.UI.init();
+            }
+            
+            // Инициализация игры
+            if (window.Game && window.Game.init) {
+                window.Game.init();
+            }
+            
+            // Подключение к сети
+            if (window.Network && window.Network.init) {
+                window.Network.init();
+            }
+            
+            console.log('Chess Online загружен!');
+        });
+    </script>
+</body>
+</html>
