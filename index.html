@@ -3,255 +3,262 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BPMshopSGH - Магазин голды BLOCKPOST</title>
+    <title>♛ ШАХМАТЫ ОНЛАЙН ♔</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- CloudPayments Widget -->
-    <script src="https://widget.cloudpayments.ru/bundles/cloudpayments"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- ВСЕ ОСТАЛЬНЫЕ СТИЛИ В style.css -->
 </head>
 <body>
-    <!-- Header -->
-    <header>
-        <div class="container">
-            <div class="header-content">
-                <div class="logo">
-                    <i class="fas fa-coins"></i>
-                    <div class="logo-text">BPM<span>shopSGH</span></div>
+    <div class="app-container">
+        <!-- Лобби -->
+        <div class="lobby active" id="lobby">
+            <div class="lobby-header">
+                <h1><i class="fas fa-chess-king"></i> Chess Online</h1>
+                <p>Играйте против реальных игроков</p>
+            </div>
+            
+            <div class="lobby-stats">
+                <div class="stat">
+                    <i class="fas fa-users"></i>
+                    <span id="online-count">0</span> онлайн
                 </div>
-                <nav>
-                    <ul>
-                        <li><a href="#home">Главная</a></li>
-                        <li><a href="#products">Продукты</a></li>
-                        <li><a href="#support">Поддержка</a></li>
-                    </ul>
-                </nav>
-                <div class="header-controls">
-                    </button>
-                    <span id="user-id-display" style="display: none;"></span>
-                    <button id="login-btn" class="btn btn-outline">Ввести ID</button>
+                <div class="stat">
+                    <i class="fas fa-bolt"></i>
+                    <span id="ping">--</span> мс
+                </div>
+                <div class="stat">
+                    <i class="fas fa-chess-board"></i>
+                    <span id="games-count">0</span> игр
                 </div>
             </div>
-        </div>
-    </header>
-
-    <!-- Модальное окно для ввода ID -->
-    <div id="login-modal" class="modal">
-        <div class="modal-content">
-            <span class="close">&times;</span>
-            <h3>Введите ваш ID в BLOCKPOST</h3>
-            <p>Ваш уникальный идентификатор в игре (можно найти в профиле)</p>
-            <input type="text" id="user-id-input" placeholder="Например: 123456789" maxlength="20">
-            <button id="confirm-id-btn" class="btn btn-primary">Подтвердить ID</button>
-        </div>
-    </div>
-
-    <!-- Страница оплаты -->
-    <div id="payment-page" class="page" style="display: none;">
-        <div class="container">
-            <div class="payment-container">
-                <button id="back-to-shop" class="btn btn-outline" style="margin-bottom: 20px;">
-                    <i class="fas fa-arrow-left"></i> Назад в магазин
+            
+            <div class="game-options">
+                <button class="btn btn-primary" onclick="startQuickGame()">
+                    <i class="fas fa-bolt"></i> Быстрая игра
                 </button>
+                <button class="btn btn-secondary" onclick="createPrivateRoom()">
+                    <i class="fas fa-user-plus"></i> Создать комнату
+                </button>
+                <button class="btn btn-ghost" onclick="joinPrivateRoom()">
+                    <i class="fas fa-sign-in-alt"></i> Присоединиться
+                </button>
+            </div>
+            
+            <!-- Создание комнаты -->
+            <div class="room-creation" id="room-creation" style="display: none;">
+                <h3><i class="fas fa-door-closed"></i> Создание комнаты</h3>
+                <div class="room-code">
+                    <code id="room-code">ABCDEF</code>
+                    <button onclick="copyRoomCode()" class="btn-small">
+                        <i class="fas fa-copy"></i> Копировать
+                    </button>
+                </div>
+                <div class="room-players" id="room-players">
+                    <div class="player" id="room-player-1">
+                        <i class="fas fa-user"></i> Вы
+                    </div>
+                    <div class="player waiting" id="room-player-2">
+                        <i class="fas fa-clock"></i> Ожидание...
+                    </div>
+                </div>
+                <button class="btn btn-success" onclick="startRoomGame()" id="start-game-btn" disabled>
+                    <i class="fas fa-play"></i> Начать игру
+                </button>
+                <button class="btn btn-danger" onclick="closeRoom()">
+                    <i class="fas fa-times"></i> Закрыть комнату
+                </button>
+            </div>
+            
+            <!-- Присоединение к комнате -->
+            <div class="room-join" id="room-join" style="display: none;">
+                <h3><i class="fas fa-sign-in-alt"></i> Присоединение к комнате</h3>
+                <input type="text" id="room-code-input" placeholder="Введите код комнаты (6 символов)" maxlength="6">
+                <div class="button-group">
+                    <button class="btn btn-primary" onclick="joinRoom()">
+                        <i class="fas fa-sign-in-alt"></i> Присоединиться
+                    </button>
+                    <button class="btn btn-secondary" onclick="cancelJoin()">
+                        <i class="fas fa-times"></i> Отмена
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Игровой экран -->
+        <div class="game-screen" id="game-screen" style="display: none;">
+            <div class="game-header">
+                <div class="player-info white">
+                    <div class="player-avatar">
+                        <i class="fas fa-user"></i>
+                    </div>
+                    <div class="player-details">
+                        <div class="player-name" id="white-player-name">Белые</div>
+                        <div class="player-time" id="white-time">10:00</div>
+                    </div>
+                    <div class="player-status" id="white-status"></div>
+                </div>
                 
-                <div class="payment-card">
-                    <h2>Оформление заказа</h2>
-                    <div id="order-summary"></div>
+                <div class="game-controls">
+                    <button class="btn btn-danger" onclick="resign()">
+                        <i class="fas fa-flag"></i> Сдаться
+                    </button>
+                    <button class="btn btn-secondary" onclick="offerDraw()">
+                        <i class="fas fa-handshake"></i> Ничья
+                    </button>
+                    <button class="btn btn-ghost" onclick="leaveGame()">
+                        <i class="fas fa-sign-out-alt"></i> Выйти
+                    </button>
+                </div>
+                
+                <div class="player-info black">
+                    <div class="player-avatar">
+                        <i class="fas fa-user"></i>
+                    </div>
+                    <div class="player-details">
+                        <div class="player-name" id="black-player-name">Черные</div>
+                        <div class="player-time" id="black-time">10:00</div>
+                    </div>
+                    <div class="player-status" id="black-status"></div>
+                </div>
+            </div>
+            
+            <div class="game-main">
+                <!-- Шахматная доска -->
+                <div class="board-container">
+                    <div class="board-controls">
+                        <button class="btn btn-small" onclick="undoMove()">
+                            <i class="fas fa-undo"></i> Назад
+                        </button>
+                        <button class="btn btn-small" onclick="flipBoard()">
+                            <i class="fas fa-sync-alt"></i> Повернуть
+                        </button>
+                    </div>
+                    <div class="chess-board" id="chess-board">
+                        <!-- Доска создается в game.js -->
+                    </div>
+                    <div class="captured-container">
+                        <div class="captured-pieces" id="white-captured"></div>
+                    </div>
+                </div>
+                
+                <!-- Боковая панель -->
+                <div class="sidebar">
+                    <div class="move-history">
+                        <h4><i class="fas fa-history"></i> История ходов</h4>
+                        <div class="moves-list" id="moves-list"></div>
+                    </div>
                     
-                    <div class="payment-methods">
-                        <h3>Выберите способ оплаты:</h3>
-                        
-                        <!-- CloudPayments - банковские карты -->
-                        <div class="method-card active" data-method="cloudpayments">
-                            <i class="fas fa-credit-card"></i>
-                            <div>
-                                <span>Банковская карта</span>
-                                <small>Visa, Mastercard, МИР, UnionPay</small>
-                            </div>
+                    <div class="chat">
+                        <h4><i class="fas fa-comments"></i> Чат</h4>
+                        <div class="chat-messages" id="chat-messages">
+                            <div class="chat-message system">Добро пожаловать в игру!</div>
                         </div>
-
-                        <!-- CloudPayments - СБП -->
-                        <div class="method-card" data-method="cloudpayments-sbp">
-                            <i class="fas fa-mobile-alt"></i>
-                            <div>
-                                <span>СБП (Система быстрых платежей)</span>
-                                <small>Оплата через приложение банка</small>
-                            </div>
-                        </div>
-
-                        <!-- Криптовалюты через NowPayments -->
-                        <div class="method-card" data-method="crypto">
-                            <i class="fab fa-bitcoin"></i>
-                            <div>
-                                <span>Криптовалюты</span>
-                                <small>BTC, ETH, USDT, USDC</small>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Контейнер для выбранного метода оплаты -->
-                    <div id="payment-method-container">
-                        <!-- Контент будет подгружаться динамически -->
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Страница успешной оплаты -->
-    <div id="success-page" class="page" style="display: none;">
-        <div class="container">
-            <div class="payment-status status-success">
-                <i class="fas fa-check-circle"></i>
-                <h2>Оплата прошла успешно!</h2>
-                <p>Ваш заказ обрабатывается. Голда будет зачислена в течение 5 минут.</p>
-                <div class="order-details" id="success-order-details"></div>
-                <div id="payment-receipt"></div>
-                <button onclick="showMainPage()" class="btn btn-primary">Вернуться в магазин</button>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Страница доставки -->
-    <div id="delivery-page" class="page" style="display: none;">
-        <div class="container">
-            <div class="payment-card">
-                <div id="delivery-details">
-                    <!-- Контент будет загружен динамически -->
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Основная страница -->
-    <div id="main-page">
-        <!-- Hero Section -->
-        <section class="hero" id="home">
-            <div class="container">
-                <h1 class="fade-in">Купи голду для BLOCKPOST Mobile</h1>
-                <p class="fade-in">Официальные поставки по самым низким ценам на рынке! Быстрая доставка, гарантия качества и круглосуточная поддержка.</p>
-                <div class="hero-buttons">
-                    <a href="#products" class="btn btn-primary btn-lg">Купить сейчас</a>
-                    <a href="#support" class="btn btn-outline btn-lg">Поддержка</a>
-                </div>
-            </div>
-        </section>
-
-        <!-- Features Section -->
-        <section class="features">
-            <div class="container">
-                <div class="section-title">
-                    <h2>Почему выбирают BPMshopSGH</h2>
-                    <p>Мы предлагаем лучшие условия для покупки игровой валюты BLOCKPOST Mobile</p>
-                </div>
-                <div class="features-grid">
-                    <div class="feature-card fade-in">
-                        <div class="feature-icon">
-                            <i class="fas fa-bolt"></i>
-                        </div>
-                        <h3>Мгновенная доставка</h3>
-                        <p>Получите голду в течение 5 минут после оплаты. Автоматическая система доставки 24/7.</p>
-                    </div>
-                    <div class="feature-card fade-in">
-                        <div class="feature-icon">
-                            <i class="fas fa-shield-alt"></i>
-                        </div>
-                        <h3>Безопасные сделки</h3>
-                        <p>Все операции защищены, официальные методы пополнения. Гарантия возврата средств.</p>
-                    </div>
-                    <div class="feature-card fade-in">
-                        <div class="feature-icon">
-                            <i class="fas fa-credit-card"></i>
-                        </div>
-                        <h3>Надежные платежи</h3>
-                        <p>Оплата через защищенные платежные системы CloudPayments.</p>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- Products Section -->
-        <section class="products" id="products">
-            <div class="container">
-                <div class="section-title">
-                    <h2>Наши предложения</h2>
-                    <p>Выберите подходящий пакет голды для BLOCKPOST Mobile</p>
-                </div>
-                <div class="products-grid">
-                    <!-- Products will be loaded by JavaScript -->
-                </div>
-            </div>
-        </section>
-
-        <!-- Support Section -->
-        <section class="support" id="support">
-            <div class="container">
-                <div class="section-title">
-                    <h2>Поддержка через Telegram</h2>
-                    <p>Наша команда всегда на связи для помощи и консультаций</p>
-                </div>
-                <div class="support-container">
-                    <div class="support-info">
-                        <h3>Свяжитесь с нами через Telegram-бота</h3>
-                        <p>Мы интегрировали Telegram-бота прямо на сайт, чтобы вы могли быстро получить помощь без перехода в мессенджер.</p>
-                        <ul class="support-features">
-                            <li><i class="fas fa-check-circle"></i> Ответ в течение 5 минут</li>
-                            <li><i class="fas fa-check-circle"></i> Круглосуточная поддержка</li>
-                            <li><i class="fas fa-check-circle"></i> Помощь с покупкой и доставкой</li>
-                            <li><i class="fas fa-check-circle"></i> Консультация по любым вопросам</li>
-                        </ul>
-                    </div>
-                    <div class="chat-widget fade-in">
-                        <div class="chat-header">
-                            <i class="fab fa-telegram"></i>
-                            <span>Поддержка BPMshopSGH</span>
-                        </div>
-                        <div class="chat-body" id="chat-body">
-                            <div class="message message-support">
-                                Здравствуйте! Чем могу помочь?
-                            </div>
-                        </div>
-                        <div class="chat-footer">
-                            <input type="text" class="chat-input" placeholder="Введите ваше сообщение..." id="user-input">
-                            <button class="chat-send" id="send-btn">
+                        <div class="chat-input">
+                            <input type="text" id="chat-input-field" placeholder="Введите сообщение..." onkeypress="if(event.key=='Enter') sendChatMessage()">
+                            <button onclick="sendChatMessage()">
                                 <i class="fas fa-paper-plane"></i>
                             </button>
                         </div>
                     </div>
+                    
+                    <div class="captured-container">
+                        <h4><i class="fas fa-skull-crossbones"></i> Взятые фигуры</h4>
+                        <div class="captured-pieces" id="black-captured"></div>
+                    </div>
                 </div>
             </div>
-        </section>
+            
+            <div class="game-status-bar" id="game-status-bar">
+                <span id="status-message">Создайте или присоединитесь к игре</span>
+            </div>
+        </div>
+        
+        <!-- Модальные окна -->
+        <div id="promotion-modal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <h3><i class="fas fa-crown"></i> Превращение пешки</h3>
+                <p>Выберите фигуру:</p>
+                <div class="promotion-options" id="promotion-options">
+                    <!-- Создается в game.js -->
+                </div>
+                <div class="modal-buttons">
+                    <button class="btn btn-secondary" onclick="hidePromotionModal()">
+                        <i class="fas fa-times"></i> Отмена
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div id="game-over-modal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <h2 id="game-over-title"><i class="fas fa-trophy"></i> Игра окончена!</h2>
+                <p id="game-over-message"></p>
+                <div class="modal-buttons">
+                    <button class="btn btn-primary" onclick="returnToLobby()">
+                        <i class="fas fa-home"></i> В лобби
+                    </button>
+                    <button class="btn btn-success" onclick="rematch()">
+                        <i class="fas fa-redo"></i> Реванш
+                    </button>
+                </div>
+            </div>
+        </div>
 
-        <!-- Footer -->
-        <footer>
-            <div class="container">
-                <div class="footer-content">
-                    <div class="footer-column">
-                        <h3>BPMshopSGH</h3>
-                        <p>Официальный партнер по продаже голды для BLOCKPOST Mobile. Безопасные сделки, низкие цены и быстрая доставка.</p>
-                    </div>
-                    <div class="footer-column">
-                        <h3>Ссылки</h3>
-                        <ul class="footer-links">
-                            <li><a href="#home">Главная</a></li>
-                            <li><a href="#products">Продукты</a></li>
-                            <li><a href="#support">Поддержка</a></li>
-                        </ul>
-                    </div>
-                    <div class="footer-column">
-                        <h3>Контакты</h3>
-                        <ul class="footer-links">
-                            <li><a href="https://t.me/your_support" target="_blank"><i class="fab fa-telegram"></i> Telegram поддержка</a></li>
-                            <li><a href="mailto:support@bpm-shop.ru"><i class="fas fa-envelope"></i> Email</a></li>
-                        </ul>
-                    </div>
-                </div>
-                <div class="footer-bottom">
-                    <p>&copy; 2025 BPMshopSGH. Все права защищены.</p>
+        <div id="draw-offer-modal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <h3><i class="fas fa-handshake"></i> Предложение ничьей</h3>
+                <p id="draw-offer-text"></p>
+                <div class="modal-buttons">
+                    <button class="btn btn-success" onclick="acceptDraw()">
+                        <i class="fas fa-check"></i> Принять
+                    </button>
+                    <button class="btn btn-danger" onclick="declineDraw()">
+                        <i class="fas fa-times"></i> Отклонить
+                    </button>
                 </div>
             </div>
-        </footer>
+        </div>
     </div>
 
-    <script src="app.js"></script>
+    <!-- Подключаем Pusher -->
+    <script src="https://js.pusher.com/7.2/pusher.min.js"></script>
+    
+    <!-- Подключаем chess.js библиотеку -->
+    <script src="chess.js"></script>
+    
+    <!-- Подключаем наши файлы -->
+    <script src="game.js"></script>
+    <script src="network.js"></script>
+    <script src="ui.js"></script>
+    
+    <script>
+        // Инициализация при загрузке
+        document.addEventListener('DOMContentLoaded', () => {
+            // Предзагрузка фигур
+            const piecesToPreload = ['wp', 'wn', 'wb', 'wr', 'wq', 'wk', 'bp', 'bn', 'bb', 'br', 'bq', 'bk'];
+            piecesToPreload.forEach(piece => {
+                const img = new Image();
+                img.src = `assets/pieces/${piece}.svg`;
+            });
+            
+            // Инициализация UI
+            if (window.UI && window.UI.init) {
+                window.UI.init();
+            }
+            
+            // Инициализация игры
+            if (window.Game && window.Game.init) {
+                window.Game.init();
+            }
+            
+            // Подключение к сети
+            if (window.Network && window.Network.init) {
+                window.Network.init();
+            }
+            
+            console.log('Chess Online загружен!');
+        });
+    </script>
 </body>
 </html>
