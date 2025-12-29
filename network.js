@@ -13,7 +13,7 @@ class Network {
 
     init() {
         // Инициализация Pusher
-        this.pusher = new Pusher('a0f39b2e9e5c7d8b4f6a', { // Тестовый ключ - замени на свой
+        this.pusher = new Pusher('f9725d9e08548ab81164', { // Тестовый ключ - замени на свой
             cluster: 'eu',
             encrypted: true,
             authEndpoint: '/api/pusher/auth'
