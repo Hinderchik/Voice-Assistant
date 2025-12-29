@@ -1,51 +1,29 @@
-// network.js - simplified online mode (public channel, no auth)
 class Network {
     constructor() {
-        this.pusher = null;
-        this.channel = null;
-        this.roomId = "global-room";
-        this.connected = false;
+        this.ws = null;
+        this.room = null;
     }
 
-    init(onMoveCallback) {
-        if (typeof Pusher === 'undefined') {
-            console.error('Pusher not loaded');
-            return;
+    connect(room, onMessage) {
+        this.room = room;
+        this.ws = new WebSocket(
+            "wss://quiet-grass-0e58.gondonloxlp.workers.dev/?room=" + room
+        );
+
+        this.ws.onopen = () => this.updateStatus(true);
+        this.ws.onmessage = e => onMessage(JSON.parse(e.data));
+        this.ws.onclose = () => this.updateStatus(false);
+    }
+
+    send(data) {
+        if (this.ws && this.ws.readyState === 1) {
+            this.ws.send(JSON.stringify(data));
         }
-
-        this.pusher = new Pusher('f9725d9e08548ab81164', {
-            cluster: 'eu',
-            forceTLS: true
-        });
-
-        this.channel = this.pusher.subscribe('public-chess');
-
-        this.channel.bind('pusher:subscription_succeeded', () => {
-            this.connected = true;
-            this.updateConnectionStatus(true);
-        });
-
-        this.channel.bind('move', data => {
-            if (onMoveCallback) {
-                onMoveCallback(data);
-            }
-        });
     }
 
-    sendMove(move) {
-        fetch('/api/move', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(move)
-        });
-    }
-
-    updateConnectionStatus(connected) {
-        const el = document.getElementById('connection-status');
-        if (el) {
-            el.textContent = connected ? 'Онлайн' : 'Оффлайн';
-        }
+    updateStatus(online) {
+        const el = document.getElementById("connection-status");
+        if (el) el.textContent = online ? "Онлайн" : "Оффлайн";
     }
 }
-
 window.Network = new Network();

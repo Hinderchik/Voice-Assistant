@@ -714,3 +714,5 @@ class ChessGame {
 
 // Глобальный экземпляр
 window.Game = new ChessGame();
+
+let currentTurn = 'w';
