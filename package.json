@@ -1,9 +1,7 @@
 {
   "name": "chess-online",
   "version": "1.0.0",
-  "dependencies": {
-    "pusher": "^5.1.0"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@vercel/node": "^3.0.0"
   },
