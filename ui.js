@@ -247,8 +247,17 @@ window.startQuickGame = function() {
     }
 };
 
+// В ui.js исправь эту функцию:
 window.createPrivateRoom = function() {
+    // 1. Показываем интерфейс
     UI.showRoomCreation();
+    
+    // 2. ОТПРАВЛЯЕМ КОМАНДУ НА СЕРВЕР!
+    if (window.Network && window.Network.createRoom) {
+        window.Network.createRoom();
+    } else {
+        console.error('❌ Network не инициализирован!');
+    }
 };
 
 window.joinPrivateRoom = function() {
