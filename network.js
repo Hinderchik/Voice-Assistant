@@ -1,214 +1,290 @@
-// network.js - ПОЛНЫЙ ИСПРАВЛЕННЫЙ КЛИЕНТ
+// network-ably.js - ПОЛНЫЙ РАБОЧИЙ КОД
 class Network {
     constructor() {
-        this.ws = null;
         this.playerId = null;
         this.playerName = null;
-        this.gameId = null;
         this.roomId = null;
-        this.wsUrl = 'wss://quiet-grass-0e58.gondonloxlp.workers.dev/ws';
-        this.messageHandlers = new Map();
-        this.reconnectAttempts = 0;
-        this.maxReconnectAttempts = 5;
-        this.pingInterval = null;
+        this.gameId = null;
+        this.ably = null;
+        this.lobbyChannel = null;
+        this.roomChannel = null;
+        this.gameChannel = null;
         
-        // Автоматическая инициализация
+        // API ключ Ably - ЗАМЕНИ НА СВОЙ!
+        this.ABLY_KEY = '-qgbRg.fCTz8A:xjM5uUcs_P99MrAccfwdWPmEygx-q_vG-OtyunE-zfQ'; 
+        
+        // Автоинициализация
         setTimeout(() => this.init(), 1000);
     }
-
+    
     init() {
         this.generatePlayerId();
-        this.setupMessageHandlers();
-        this.connect();
+        this.connectToAbly();
     }
-
+    
     generatePlayerId() {
-        if (!this.playerId) {
-            this.playerId = `player_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-            try {
-                this.playerName = localStorage.getItem('chess_player_name') || 
-                                 `Игрок_${this.playerId.slice(-4)}`;
-            } catch(e) {
-                this.playerName = `Игрок_${this.playerId.slice(-4)}`;
-            }
+        this.playerId = `player_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        
+        try {
+            this.playerName = localStorage.getItem('chess_player_name') || 
+                             `Игрок_${this.playerId.slice(-4)}`;
+        } catch(e) {
+            this.playerName = `Игрок_${this.playerId.slice(-4)}`;
         }
     }
-
-    connect() {
-        if (this.ws && this.ws.readyState === WebSocket.OPEN) return;
-
-        console.log('🔗 Подключение к WebSocket...');
-        this.ws = new WebSocket(this.wsUrl);
-
-        this.ws.onopen = () => {
-            console.log('✅ WebSocket подключен');
-            this.reconnectAttempts = 0;
+    
+    connectToAbly() {
+        console.log('🔗 Подключение к Ably...');
+        
+        this.ably = new Ably.Realtime(this.ABLY_KEY);
+        
+        this.ably.connection.on('connected', () => {
+            console.log('✅ Подключено к Ably');
             this.updateStatus(true);
             
-            this.send({
-                type: 'connect',
-                playerId: this.playerId,
-                playerName: this.playerName
-            });
+            // Подписываемся на лобби
+            this.subscribeToLobby();
             
-            this.startPing();
-        };
-
-        this.ws.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data);
-                console.log('📨 От сервера:', data.type, data);
-                this.handleMessage(data);
-            } catch (error) {
-                console.error('❌ Ошибка парсинга:', error);
+            if (window.UI) {
+                window.UI.addChatMessage('✅ Подключено к игровому серверу', 'Система');
             }
-        };
-
-        this.ws.onclose = (event) => {
-            console.log('❌ Отключено:', event.code, event.reason);
+        });
+        
+        this.ably.connection.on('disconnected', () => {
+            console.log('❌ Отключено от Ably');
             this.updateStatus(false);
-            this.stopPing();
-            
-            if (this.reconnectAttempts < this.maxReconnectAttempts) {
-                this.reconnectAttempts++;
-                const delay = Math.min(1000 * this.reconnectAttempts, 5000);
-                console.log(`↻ Переподключение через ${delay}мс`);
-                setTimeout(() => this.connect(), delay);
-            }
-        };
-
-        this.ws.onerror = (error) => {
-            console.error('💥 WebSocket ошибка:', error);
+        });
+        
+        this.ably.connection.on('failed', () => {
+            console.error('💥 Ошибка подключения к Ably');
             this.updateStatus(false);
-        };
+        });
     }
-
-    send(data) {
-        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-            console.log('📤 Отправка на сервер:', data.type, data);
-            this.ws.send(JSON.stringify(data));
-            return true;
-        }
-        console.warn('⚠️ WebSocket не готов к отправке');
-        return false;
+    
+    subscribeToLobby() {
+        this.lobbyChannel = this.ably.channels.get('chess-lobby');
+        
+        // Входим в presence как игрок
+        this.lobbyChannel.presence.enter({
+            playerId: this.playerId,
+            playerName: this.playerName,
+            status: 'online'
+        });
+        
+        // Следим за другими игроками
+        this.lobbyChannel.presence.subscribe('enter', (member) => {
+            console.log('👤 Игрок онлайн:', member.data.playerName);
+            this.updateOnlineCount();
+        });
+        
+        this.lobbyChannel.presence.subscribe('leave', (member) => {
+            console.log('👋 Игрок вышел:', member.data.playerName);
+            this.updateOnlineCount();
+        });
     }
-
-    startPing() {
-        this.stopPing();
-        this.pingInterval = setInterval(() => {
-            if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-                this.send({
-                    type: 'ping',
-                    timestamp: Date.now(),
-                    playerId: this.playerId
-                });
+    
+    updateOnlineCount() {
+        this.lobbyChannel.presence.get((err, members) => {
+            if (!err && members && window.UI) {
+                window.UI.updateOnlineStats(members.length, 0);
             }
-        }, 25000);
+        });
     }
-
-    stopPing() {
-        if (this.pingInterval) {
-            clearInterval(this.pingInterval);
-            this.pingInterval = null;
-        }
-    }
-
+    
     updateStatus(connected) {
         if (window.UI && window.UI.updateConnectionStatus) {
             window.UI.updateConnectionStatus(connected);
         }
     }
-
-    setupMessageHandlers() {
-        // Подтверждение подключения
-        this.messageHandlers.set('connected', (data) => {
-            console.log('✅ Сервер подтвердил подключение');
-            if (window.UI && window.UI.addChatMessage) {
-                window.UI.addChatMessage('✅ Подключено к игровому серверу', 'Система');
-            }
+    
+    // ========== РАБОТА С КОМНАТАМИ ==========
+    
+    createRoom() {
+        console.log('🏠 Создание комнаты...');
+        
+        // Генерируем код комнаты
+        const roomId = this.generateRoomCode();
+        this.roomId = roomId;
+        
+        // Создаем канал для комнаты
+        this.roomChannel = this.ably.channels.get(`room:${roomId}`);
+        
+        // Входим в комнату
+        this.roomChannel.presence.enter({
+            playerId: this.playerId,
+            playerName: this.playerName,
+            isCreator: true,
+            status: 'ready'
         });
-
-        // Создание комнаты
-        this.messageHandlers.set('room_created', (data) => {
-            console.log('🏠 Комната создана:', data.roomId);
-            this.roomId = data.roomId;
+        
+        // Подписываемся на обновления комнаты
+        this.roomChannel.subscribe('room_update', (message) => {
+            this.handleRoomUpdate(message.data);
+        });
+        
+        // Отправляем событие создания комнаты
+        this.roomChannel.publish('room_created', {
+            type: 'room_created',
+            roomId,
+            creator: this.playerId,
+            playerName: this.playerName,
+            timestamp: Date.now()
+        });
+        
+        // Показываем UI
+        if (window.UI) {
+            window.UI.showRoomCode(roomId);
+            window.UI.updateRoomPlayers([
+                { name: this.playerName, status: 'ready' },
+                { name: 'Ожидание...', status: 'waiting' }
+            ]);
+            window.UI.addChatMessage(`🏠 Комната ${roomId} создана`, 'Система');
+        }
+        
+        return roomId;
+    }
+    
+    joinRoom(roomCode) {
+        console.log('🔑 Присоединение к комнате:', roomCode);
+        
+        if (!roomCode || roomCode.length !== 6) {
+            if (window.UI) {
+                window.UI.showMessage('❌ Код комнаты должен быть 6 символов', 'error');
+            }
+            return false;
+        }
+        
+        this.roomId = roomCode;
+        this.roomChannel = this.ably.channels.get(`room:${roomCode}`);
+        
+        // Пытаемся войти в presence комнаты
+        this.roomChannel.presence.enter({
+            playerId: this.playerId,
+            playerName: this.playerName,
+            isCreator: false,
+            status: 'ready'
+        }, (err) => {
+            if (err) {
+                console.error('❌ Ошибка входа в комнату:', err);
+                if (window.UI) {
+                    window.UI.showMessage('Комната не найдена или заполнена', 'error');
+                }
+                return;
+            }
+            
+            console.log('✅ Вошли в комнату');
+            
+            // Подписываемся на обновления
+            this.roomChannel.subscribe('room_update', (message) => {
+                this.handleRoomUpdate(message.data);
+            });
+            
+            // Отправляем событие что присоединились
+            this.roomChannel.publish('player_joined', {
+                type: 'player_joined',
+                playerId: this.playerId,
+                playerName: this.playerName,
+                roomId: roomCode,
+                timestamp: Date.now()
+            });
             
             if (window.UI) {
-                // 1. Показываем код комнаты
-                window.UI.showRoomCode(data.roomId);
+                window.UI.addChatMessage(`✅ Присоединились к комнате ${roomCode}`, 'Система');
+                window.UI.showMessage('Вы в комнате!', 'success');
                 
-                // 2. Обновляем список игроков
-                if (data.players && data.players.length > 0) {
-                    window.UI.updateRoomPlayers(data.players.map(p => ({
-                        name: p.name || 'Игрок',
-                        status: p.status || 'ready'
-                    })));
-                } else {
-                    window.UI.updateRoomPlayers([
-                        { name: this.playerName, status: 'ready' },
-                        { name: 'Ожидание второго игрока...', status: 'waiting' }
-                    ]);
-                }
-                
-                // 3. Сообщения
-                window.UI.addChatMessage(`🏠 Комната ${data.roomId} создана`, 'Система');
-                window.UI.addChatMessage('Отправьте код другу для подключения', 'Система');
-                window.UI.showMessage(`Комната ${data.roomId} создана!`, 'success');
-                
-                // 4. ВАЖНО: Показываем UI комнаты
-                if (!document.getElementById('room-creation').style.display || 
-                    document.getElementById('room-creation').style.display === 'none') {
-                    window.UI.showRoomCreation();
-                }
-            }
-        });
-
-        // Присоединение к комнате
-        this.messageHandlers.set('room_joined', (data) => {
-            console.log('✅ Присоединились к комнате:', data.roomId);
-            this.roomId = data.roomId;
-            
-            if (window.UI) {
-                window.UI.addChatMessage(`✅ Вы присоединились к комнате ${data.roomId}`, 'Система');
-                window.UI.showMessage('Вы в комнате! Ожидайте начала игры', 'success');
-                
-                // ВАЖНО: Скрываем форму ввода кода
+                // Скрываем форму ввода
                 document.getElementById('room-join').style.display = 'none';
                 
                 // Показываем интерфейс комнаты
                 document.getElementById('room-creation').style.display = 'block';
-                document.getElementById('room-code').textContent = data.roomId;
+                document.getElementById('room-code').textContent = roomCode;
             }
         });
-
-        // Обновление комнаты (кто-то присоединился/вышел)
-        this.messageHandlers.set('room_updated', (data) => {
-            console.log('🔄 Комната обновлена:', data.players);
-            
-            if (window.UI && data.players) {
-                const playersFormatted = data.players.map(p => ({
-                    name: p.name || `Игрок_${p.id?.slice(-4)}`,
-                    status: 'ready'
-                }));
-                
-                window.UI.updateRoomPlayers(playersFormatted);
-                
-                if (data.players.length === 2) {
-                    window.UI.addChatMessage('✅ Второй игрок присоединился!', 'Система');
-                    window.UI.addChatMessage('Создатель комнаты может начать игру', 'Система');
+        
+        return true;
+    }
+    
+    handleRoomUpdate(data) {
+        console.log('🔄 Обновление комнаты:', data);
+        
+        if (data.type === 'player_joined' && window.UI) {
+            // Получаем список игроков в комнате
+            this.roomChannel.presence.get((err, members) => {
+                if (!err && members) {
+                    const players = members.map(member => ({
+                        name: member.data.playerName,
+                        status: 'ready'
+                    }));
                     
-                    // Если это создатель - активируем кнопку "Начать игру"
-                    const startBtn = document.getElementById('start-game-btn');
-                    if (startBtn) {
-                        startBtn.disabled = false;
+                    window.UI.updateRoomPlayers(players);
+                    
+                    if (players.length === 2) {
+                        window.UI.addChatMessage('✅ Второй игрок присоединился!', 'Система');
+                        window.UI.addChatMessage('Создатель может начать игру', 'Система');
                     }
                 }
+            });
+        }
+    }
+    
+    startGame() {
+        if (!this.roomId) {
+            console.error('❌ Нет активной комнаты');
+            return;
+        }
+        
+        console.log('🚀 Начало игры в комнате:', this.roomId);
+        
+        // Создаем ID игры
+        this.gameId = `game_${Date.now()}_${this.roomId}`;
+        
+        // Получаем игроков в комнате
+        this.roomChannel.presence.get((err, members) => {
+            if (err || !members || members.length !== 2) {
+                console.error('❌ Нужно 2 игрока');
+                return;
             }
+            
+            // Определяем цвета
+            const player1Color = Math.random() > 0.5 ? 'w' : 'b';
+            const player2Color = player1Color === 'w' ? 'b' : 'w';
+            
+            // Создаем игровой канал
+            this.gameChannel = this.ably.channels.get(`game:${this.gameId}`);
+            
+            // Уведомляем игроков
+            members.forEach((member, index) => {
+                const isPlayer1 = index === 0;
+                const opponentIndex = 1 - index;
+                const opponent = members[opponentIndex];
+                
+                // Отправляем через room channel чтобы все получили
+                this.roomChannel.publish('game_start', {
+                    type: 'game_start',
+                    gameId: this.gameId,
+                    playerId: member.data.playerId,
+                    color: isPlayer1 ? player1Color : player2Color,
+                    opponent: opponent.data.playerName,
+                    timeControl: { white: 600, black: 600 },
+                    timestamp: Date.now()
+                });
+            });
+            
+            // Подписываемся на игровой канал
+            this.gameChannel.subscribe('move', (message) => {
+                this.handleGameMove(message.data);
+            });
+            
+            this.gameChannel.subscribe('chat', (message) => {
+                this.handleGameChat(message.data);
+            });
         });
-
-        // Начало игры
-        this.messageHandlers.set('game_start', (data) => {
-            console.log('🎮 Начало игры:', data);
+    }
+    
+    handleGameStart(data) {
+        if (data.playerId === this.playerId) {
+            console.log('🎮 Начинаем игру:', data);
+            
             this.gameId = data.gameId;
             this.roomId = null;
             
@@ -217,7 +293,7 @@ class Network {
                     gameId: data.gameId,
                     color: data.color,
                     opponent: data.opponent,
-                    timeControl: data.timeControl || { white: 600, black: 600 }
+                    timeControl: data.timeControl
                 });
             }
             
@@ -227,158 +303,123 @@ class Network {
                 window.UI.addChatMessage(`🎮 Игра началась! Вы играете ${colorText}`, 'Система');
                 window.UI.addChatMessage(`Противник: ${data.opponent}`, 'Система');
             }
-        });
-
-        // Ошибка
-        this.messageHandlers.set('error', (data) => {
-            console.error('❌ Ошибка сервера:', data.message);
-            if (window.UI && window.UI.showMessage) {
-                window.UI.showMessage(data.message || 'Ошибка сервера', 'error');
+            
+            // Выходим из комнатного канала
+            if (this.roomChannel) {
+                this.roomChannel.presence.leave();
             }
-        });
-
-        // Чат
-        this.messageHandlers.set('chat', (data) => {
-            if (window.UI && window.UI.addChatMessage) {
-                window.UI.addChatMessage(data.message, data.playerName || 'Игрок');
-            }
-        });
-        
-        // Ход
-        this.messageHandlers.set('move', (data) => {
-            if (window.Game && window.Game.applyMove && this.gameId === data.gameId) {
-                window.Game.applyMove(data.move);
-            }
-        });
-        
-        // Pong
-        this.messageHandlers.set('pong', () => {
-            console.log('🏓 Pong received');
-        });
-    }
-
-    handleMessage(data) {
-        const handler = this.messageHandlers.get(data.type);
-        if (handler) {
-            handler(data);
-        } else {
-            console.log('📨 Неизвестный тип сообщения:', data.type, data);
         }
     }
-
-    // ========== ПУБЛИЧНЫЕ МЕТОДЫ ==========
     
-    findGame() {
-        this.send({
-            type: 'find_game',
-            playerId: this.playerId,
-            playerName: this.playerName
-        });
-        
-        if (window.UI) {
-            window.UI.showMessage('🔍 Ищем соперника...', 'info');
-        }
-    }
-
-    createRoom() {
-        console.log('🏠 Создание комнаты...');
-        this.send({
-            type: 'create_room',
-            playerId: this.playerId,
-            playerName: this.playerName
-        });
-        
-        if (window.UI) {
-            window.UI.showMessage('Создаем комнату...', 'info');
-        }
-    }
-
-    joinRoom(roomCode) {
-        console.log('🔑 Присоединение к комнате:', roomCode);
-        
-        if (!roomCode || roomCode.length !== 6) {
-            if (window.UI) {
-                window.UI.showMessage('❌ Код комнаты должен быть 6 символов', 'error');
-            }
-            return;
-        }
-        
-        this.send({
-            type: 'join_room',
-            playerId: this.playerId,
-            playerName: this.playerName,
-            roomCode: roomCode.toUpperCase().trim()
-        });
-    }
-
-    startGame(roomCode) {
-        console.log('🚀 Запуск игры в комнате:', roomCode);
-        this.send({
-            type: 'start_game',
-            playerId: this.playerId,
-            roomId: roomCode || this.roomId
-        });
-    }
-
+    // ========== ИГРОВЫЕ ДЕЙСТВИЯ ==========
+    
     sendMove(move) {
-        if (!this.gameId) {
-            console.warn('⚠️ Нет активной игры для хода');
+        if (!this.gameId || !this.gameChannel) {
+            console.warn('⚠️ Нет активной игры');
             return;
         }
         
-        this.send({
+        this.gameChannel.publish('move', {
             type: 'move',
             playerId: this.playerId,
             gameId: this.gameId,
-            move: move
+            move: move,
+            timestamp: Date.now()
         });
     }
-
+    
+    handleGameMove(data) {
+        if (data.playerId !== this.playerId && window.Game && window.Game.applyMove) {
+            window.Game.applyMove(data.move);
+        }
+    }
+    
     sendChat(message) {
-        const target = this.gameId ? this.gameId : (this.roomId || 'lobby');
-        this.send({
+        const channel = this.gameChannel || this.roomChannel || this.lobbyChannel;
+        if (!channel) return;
+        
+        channel.publish('chat', {
             type: 'chat',
             playerId: this.playerId,
             playerName: this.playerName,
-            target: target,
-            message: message
+            message: message,
+            timestamp: Date.now()
         });
     }
-
+    
+    handleGameChat(data) {
+        if (window.UI && data.playerId !== this.playerId) {
+            window.UI.addChatMessage(data.message, data.playerName);
+        }
+    }
+    
+    // ========== УТИЛИТЫ ==========
+    
+    generateRoomCode() {
+        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+        let code = '';
+        for (let i = 0; i < 6; i++) {
+            code += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return code;
+    }
+    
+    // ========== ПУБЛИЧНЫЕ МЕТОДЫ ==========
+    
+    findGame() {
+        // Пока не реализовано - можно добавить matchmaking канал
+        console.log('🔍 Поиск игры (не реализовано)');
+        if (window.UI) {
+            window.UI.showMessage('Быстрая игра пока не работает', 'info');
+        }
+    }
+    
     resign() {
         if (!this.gameId) return;
-        this.send({ type: 'resign', playerId: this.playerId, gameId: this.gameId });
+        
+        if (this.gameChannel) {
+            this.gameChannel.publish('resign', {
+                type: 'resign',
+                playerId: this.playerId,
+                gameId: this.gameId
+            });
+        }
     }
     
     offerDraw() {
         if (!this.gameId) return;
-        this.send({ type: 'offer_draw', playerId: this.playerId, gameId: this.gameId });
-    }
-    
-    acceptDraw() {
-        if (!this.gameId) return;
-        this.send({ type: 'accept_draw', playerId: this.playerId, gameId: this.gameId });
-    }
-    
-    declineDraw() {
-        if (!this.gameId) return;
-        this.send({ type: 'decline_draw', playerId: this.playerId, gameId: this.gameId });
+        
+        if (this.gameChannel) {
+            this.gameChannel.publish('draw_offer', {
+                type: 'draw_offer',
+                playerId: this.playerId,
+                gameId: this.gameId
+            });
+        }
     }
     
     leaveGame() {
         if (this.gameId) {
-            this.send({ type: 'leave_game', playerId: this.playerId, gameId: this.gameId });
             this.gameId = null;
+            if (this.gameChannel) {
+                this.gameChannel.presence.leave();
+                this.gameChannel = null;
+            }
         }
+        
         if (window.Game && window.Game.reset) {
             window.Game.reset();
         }
     }
     
     disconnect() {
-        this.stopPing();
-        if (this.ws) {
-            this.ws.close(1000, 'Пользователь вышел');
+        // Выходим из всех каналов
+        if (this.lobbyChannel) this.lobbyChannel.presence.leave();
+        if (this.roomChannel) this.roomChannel.presence.leave();
+        if (this.gameChannel) this.gameChannel.presence.leave();
+        
+        if (this.ably) {
+            this.ably.close();
         }
     }
 }
@@ -386,18 +427,18 @@ class Network {
 // Глобальный экземпляр
 window.Network = new Network();
 
-// Глобальные функции для кнопок
+// Глобальные функции для UI
 window.createPrivateRoom = function() {
-    if (window.Network) {
-        window.Network.createRoom();
-        // UI обновится когда придет room_created
+    if (window.Network && window.Network.createRoom) {
+        const roomId = window.Network.createRoom();
+        if (window.UI) {
+            window.UI.showRoomCreation();
+        }
     }
 };
 
 window.joinPrivateRoom = function() {
-    if (window.UI) {
-        window.UI.showRoomJoin();
-    }
+    if (window.UI) window.UI.showRoomJoin();
 };
 
 window.joinRoom = function() {
@@ -405,42 +446,43 @@ window.joinRoom = function() {
     if (!input) return;
     
     const code = input.value.toUpperCase().trim();
-    if (code.length !== 6) {
-        if (window.UI) {
-            window.UI.showMessage('❌ Код комнаты должен быть 6 символов', 'error');
-        }
-        return;
-    }
-    
     if (window.Network) {
         window.Network.joinRoom(code);
     }
 };
 
 window.startRoomGame = function() {
-    const code = document.getElementById('room-code')?.textContent;
-    if (window.Network && code) {
-        window.Network.startGame(code);
+    if (window.Network && window.Network.startGame) {
+        window.Network.startGame();
     }
 };
 
-window.copyRoomCode = function() {
-    const code = document.getElementById('room-code')?.textContent;
-    if (code && navigator.clipboard) {
-        navigator.clipboard.writeText(code)
-            .then(() => {
-                if (window.UI) window.UI.showMessage('Код скопирован!', 'success');
-            })
-            .catch(() => {
-                if (window.UI) window.UI.showMessage('Ошибка копирования', 'error');
-            });
-    }
-};
-
-// Автоматическая инициализация
+// Обработчики для Ably событий
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('♟️ Chess Online загружен');
-    if (window.UI && window.UI.init) {
-        window.UI.init();
-    }
+    // Подписываемся на события когда Network готов
+    setTimeout(() => {
+        if (window.Network && window.Network.ably) {
+            // Подписка на события через глобальные обработчики
+            const network = window.Network;
+            
+            // Обработка начала игры
+            if (network.roomChannel) {
+                network.roomChannel.subscribe('game_start', (message) => {
+                    network.handleGameStart(message.data);
+                });
+            }
+            
+            // Обработка чата
+            const lobbyChannel = network.ably.channels.get('chess-lobby');
+            lobbyChannel.subscribe('chat', (message) => {
+                if (window.UI && message.data.playerId !== network.playerId) {
+                    window.UI.addChatMessage(message.data.message, message.data.playerName);
+                }
+            });
+        }
+        
+        if (window.UI && window.UI.init) {
+            window.UI.init();
+        }
+    }, 2000);
 });
