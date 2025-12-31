@@ -1,4 +1,4 @@
-// network.js - ИСПРАВЛЕННАЯ ВЕРСИЯ
+// network.js - ПОЛНЫЙ ИСПРАВЛЕННЫЙ КЛИЕНТ
 class Network {
     constructor() {
         this.ws = null;
@@ -11,7 +11,6 @@ class Network {
         this.reconnectAttempts = 0;
         this.maxReconnectAttempts = 5;
         this.pingInterval = null;
-        this.roomCode = null;
         
         // Автоматическая инициализация
         setTimeout(() => this.init(), 1000);
@@ -46,14 +45,12 @@ class Network {
             this.reconnectAttempts = 0;
             this.updateStatus(true);
             
-            // Отправляем информацию о подключении
             this.send({
                 type: 'connect',
                 playerId: this.playerId,
                 playerName: this.playerName
             });
             
-            // Запускаем ping
             this.startPing();
         };
 
@@ -131,13 +128,10 @@ class Network {
             }
         });
 
-        // СОЗДАНИЕ КОМНАТЫ - ИСПРАВЛЕННЫЙ ОБРАБОТЧИК
+        // Создание комнаты
         this.messageHandlers.set('room_created', (data) => {
-            console.log('🏠 Комната создана на сервере:', data.roomId);
-            
-            // Сохраняем ID комнаты
+            console.log('🏠 Комната создана:', data.roomId);
             this.roomId = data.roomId;
-            this.roomCode = data.roomId;
             
             if (window.UI) {
                 // 1. Показываем код комнаты
@@ -147,40 +141,51 @@ class Network {
                 if (data.players && data.players.length > 0) {
                     window.UI.updateRoomPlayers(data.players.map(p => ({
                         name: p.name || 'Игрок',
-                        status: 'ready'
+                        status: p.status || 'ready'
                     })));
                 } else {
-                    // Если сервер не прислал игроков, показываем дефолтных
                     window.UI.updateRoomPlayers([
                         { name: this.playerName, status: 'ready' },
                         { name: 'Ожидание второго игрока...', status: 'waiting' }
                     ]);
                 }
                 
-                // 3. Сообщения в чат
+                // 3. Сообщения
                 window.UI.addChatMessage(`🏠 Комната ${data.roomId} создана`, 'Система');
-                window.UI.addChatMessage('Отправьте этот код другу для подключения', 'Система');
-                
-                // 4. Уведомление
+                window.UI.addChatMessage('Отправьте код другу для подключения', 'Система');
                 window.UI.showMessage(`Комната ${data.roomId} создана!`, 'success');
+                
+                // 4. ВАЖНО: Показываем UI комнаты
+                if (!document.getElementById('room-creation').style.display || 
+                    document.getElementById('room-creation').style.display === 'none') {
+                    window.UI.showRoomCreation();
+                }
             }
         });
 
         // Присоединение к комнате
         this.messageHandlers.set('room_joined', (data) => {
-            console.log('✅ Присоединились к комнате:', data);
+            console.log('✅ Присоединились к комнате:', data.roomId);
+            this.roomId = data.roomId;
+            
             if (window.UI) {
-                window.UI.addChatMessage(`✅ Вы присоединились к комнате`, 'Система');
+                window.UI.addChatMessage(`✅ Вы присоединились к комнате ${data.roomId}`, 'Система');
                 window.UI.showMessage('Вы в комнате! Ожидайте начала игры', 'success');
+                
+                // ВАЖНО: Скрываем форму ввода кода
+                document.getElementById('room-join').style.display = 'none';
+                
+                // Показываем интерфейс комнаты
+                document.getElementById('room-creation').style.display = 'block';
+                document.getElementById('room-code').textContent = data.roomId;
             }
         });
 
-        // Обновление комнаты (когда кто-то присоединился)
+        // Обновление комнаты (кто-то присоединился/вышел)
         this.messageHandlers.set('room_updated', (data) => {
             console.log('🔄 Комната обновлена:', data.players);
             
             if (window.UI && data.players) {
-                // Преобразуем формат данных
                 const playersFormatted = data.players.map(p => ({
                     name: p.name || `Игрок_${p.id?.slice(-4)}`,
                     status: 'ready'
@@ -188,10 +193,15 @@ class Network {
                 
                 window.UI.updateRoomPlayers(playersFormatted);
                 
-                // Если есть 2 игрока, показываем сообщение
                 if (data.players.length === 2) {
                     window.UI.addChatMessage('✅ Второй игрок присоединился!', 'Система');
                     window.UI.addChatMessage('Создатель комнаты может начать игру', 'Система');
+                    
+                    // Если это создатель - активируем кнопку "Начать игру"
+                    const startBtn = document.getElementById('start-game-btn');
+                    if (startBtn) {
+                        startBtn.disabled = false;
+                    }
                 }
             }
         });
@@ -234,8 +244,15 @@ class Network {
             }
         });
         
-        // Pong ответ
-        this.messageHandlers.set('pong', (data) => {
+        // Ход
+        this.messageHandlers.set('move', (data) => {
+            if (window.Game && window.Game.applyMove && this.gameId === data.gameId) {
+                window.Game.applyMove(data.move);
+            }
+        });
+        
+        // Pong
+        this.messageHandlers.set('pong', () => {
             console.log('🏓 Pong received');
         });
     }
@@ -252,7 +269,6 @@ class Network {
     // ========== ПУБЛИЧНЫЕ МЕТОДЫ ==========
     
     findGame() {
-        console.log('🔍 Поиск игры...');
         this.send({
             type: 'find_game',
             playerId: this.playerId,
@@ -265,9 +281,7 @@ class Network {
     }
 
     createRoom() {
-        console.log('🏠 Отправка запроса на создание комнаты...');
-        
-        // ОЧЕНЬ ВАЖНО: сначала отправляем на сервер, UI обновится из ответа
+        console.log('🏠 Создание комнаты...');
         this.send({
             type: 'create_room',
             playerId: this.playerId,
@@ -276,7 +290,6 @@ class Network {
         
         if (window.UI) {
             window.UI.showMessage('Создаем комнату...', 'info');
-            window.UI.showRoomCreation(); // Показываем UI создания комнаты
         }
     }
 
@@ -296,10 +309,6 @@ class Network {
             playerName: this.playerName,
             roomCode: roomCode.toUpperCase().trim()
         });
-        
-        if (window.UI) {
-            window.UI.showMessage(`🔑 Присоединяемся к комнате ${roomCode}...`, 'info');
-        }
     }
 
     startGame(roomCode) {
@@ -307,7 +316,7 @@ class Network {
         this.send({
             type: 'start_game',
             playerId: this.playerId,
-            roomId: roomCode || this.roomCode
+            roomId: roomCode || this.roomId
         });
     }
 
@@ -338,47 +347,27 @@ class Network {
 
     resign() {
         if (!this.gameId) return;
-        this.send({ 
-            type: 'resign', 
-            playerId: this.playerId, 
-            gameId: this.gameId 
-        });
+        this.send({ type: 'resign', playerId: this.playerId, gameId: this.gameId });
     }
     
     offerDraw() {
         if (!this.gameId) return;
-        this.send({ 
-            type: 'offer_draw', 
-            playerId: this.playerId, 
-            gameId: this.gameId 
-        });
+        this.send({ type: 'offer_draw', playerId: this.playerId, gameId: this.gameId });
     }
     
     acceptDraw() {
         if (!this.gameId) return;
-        this.send({ 
-            type: 'accept_draw', 
-            playerId: this.playerId, 
-            gameId: this.gameId 
-        });
+        this.send({ type: 'accept_draw', playerId: this.playerId, gameId: this.gameId });
     }
     
     declineDraw() {
         if (!this.gameId) return;
-        this.send({ 
-            type: 'decline_draw', 
-            playerId: this.playerId, 
-            gameId: this.gameId 
-        });
+        this.send({ type: 'decline_draw', playerId: this.playerId, gameId: this.gameId });
     }
     
     leaveGame() {
         if (this.gameId) {
-            this.send({ 
-                type: 'leave_game', 
-                playerId: this.playerId, 
-                gameId: this.gameId 
-            });
+            this.send({ type: 'leave_game', playerId: this.playerId, gameId: this.gameId });
             this.gameId = null;
         }
         if (window.Game && window.Game.reset) {
@@ -397,16 +386,18 @@ class Network {
 // Глобальный экземпляр
 window.Network = new Network();
 
-// Экспортируем глобальные функции для UI
+// Глобальные функции для кнопок
 window.createPrivateRoom = function() {
     if (window.Network) {
         window.Network.createRoom();
-        // UI покажет room_created когда придет ответ от сервера
+        // UI обновится когда придет room_created
     }
 };
 
 window.joinPrivateRoom = function() {
-    if (window.UI) window.UI.showRoomJoin();
+    if (window.UI) {
+        window.UI.showRoomJoin();
+    }
 };
 
 window.joinRoom = function() {
@@ -415,7 +406,9 @@ window.joinRoom = function() {
     
     const code = input.value.toUpperCase().trim();
     if (code.length !== 6) {
-        if (window.UI) window.UI.showMessage('❌ Код комнаты должен быть 6 символов', 'error');
+        if (window.UI) {
+            window.UI.showMessage('❌ Код комнаты должен быть 6 символов', 'error');
+        }
         return;
     }
     
@@ -444,7 +437,7 @@ window.copyRoomCode = function() {
     }
 };
 
-// Автоматическая инициализация при загрузке
+// Автоматическая инициализация
 document.addEventListener('DOMContentLoaded', () => {
     console.log('♟️ Chess Online загружен');
     if (window.UI && window.UI.init) {

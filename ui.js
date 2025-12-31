@@ -1,9 +1,10 @@
-// ui.js - Управление интерфейсом
+// ui.js - Управление интерфейсом (ИСПРАВЛЕННАЯ ВЕРСИЯ)
 class UI {
     static init() {
         this.setupEventListeners();
         this.showLobby();
         this.setupModals();
+        this.initRoomCodeInput();
     }
 
     static setupEventListeners() {
@@ -31,6 +32,21 @@ class UI {
             chatInput.addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') {
                     this.sendChatMessage();
+                }
+            });
+        }
+    }
+
+    static initRoomCodeInput() {
+        const input = document.getElementById('room-code-input');
+        if (input) {
+            input.addEventListener('input', (e) => {
+                // Автоматически преобразуем в верхний регистр
+                e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+                
+                // Ограничиваем 6 символов
+                if (e.target.value.length > 6) {
+                    e.target.value = e.target.value.slice(0, 6);
                 }
             });
         }
@@ -66,6 +82,12 @@ class UI {
         }
         
         this.updateStatus('Создайте или присоединитесь к игре');
+        
+        // Очищаем чат при возвращении в лобби
+        const chatMessages = document.getElementById('chat-messages');
+        if (chatMessages) {
+            chatMessages.innerHTML = '<div class="chat-message system">Добро пожаловать в шахматы!</div>';
+        }
     }
 
     static showGameScreen() {
@@ -76,16 +98,20 @@ class UI {
     }
 
     static showRoomCreation() {
+        // Показываем UI создания комнаты (код придет с сервера)
         document.getElementById('room-creation').style.display = 'block';
         document.getElementById('room-join').style.display = 'none';
         
-        // Генерация кода комнаты
-        const code = this.generateRoomCode();
-        document.getElementById('room-code').textContent = code;
+        // НЕ генерируем код здесь - он придет с сервера
+        // document.getElementById('room-code').textContent = '';
         
-        this.updateRoomPlayers([{ name: 'Вы', status: 'ready' }]);
+        this.updateStatus('Ожидание второго игрока...');
         
-        this.showMessage('Комната создана. Отправьте код другу.');
+        // Скрываем кнопку "Начать игру" пока нет второго игрока
+        const startBtn = document.getElementById('start-game-btn');
+        if (startBtn) {
+            startBtn.disabled = true;
+        }
     }
 
     static showRoomJoin() {
@@ -97,8 +123,11 @@ class UI {
             input.value = '';
             input.focus();
         }
+        
+        this.updateStatus('Введите код комнаты');
     }
 
+    // Оставляем эту функцию для генерации кода, но не используем для комнат
     static generateRoomCode() {
         const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
         let code = '';
@@ -110,7 +139,10 @@ class UI {
 
     static showRoomCode(code) {
         const codeEl = document.getElementById('room-code');
-        if (codeEl) codeEl.textContent = code;
+        if (codeEl) {
+            codeEl.textContent = code;
+            codeEl.style.opacity = '1';
+        }
     }
 
     static updateRoomPlayers(players) {
@@ -126,16 +158,23 @@ class UI {
             
             playerEl.innerHTML = `
                 <i class="fas fa-${player.status === 'waiting' ? 'clock' : 'user'}"></i>
-                ${player.name}
+                <span class="player-name">${player.name}</span>
             `;
             
             playersContainer.appendChild(playerEl);
         });
         
-        // Активируем кнопку "Начать игру" если есть два игрока
+        // Активируем кнопку "Начать игру" если есть два готовых игрока
         const startBtn = document.getElementById('start-game-btn');
         if (startBtn) {
-            startBtn.disabled = players.length < 2;
+            const readyPlayers = players.filter(p => p.status !== 'waiting').length;
+            startBtn.disabled = readyPlayers < 2;
+            
+            if (readyPlayers === 2) {
+                startBtn.innerHTML = '<i class="fas fa-play"></i> Начать игру (2/2)';
+            } else {
+                startBtn.innerHTML = `<i class="fas fa-play"></i> Начать игру (${readyPlayers}/2)`;
+            }
         }
     }
 
@@ -156,6 +195,7 @@ class UI {
         
         chatMessages.scrollTop = chatMessages.scrollHeight;
         
+        // Ограничиваем историю сообщений
         const messages = chatMessages.querySelectorAll('.chat-message');
         if (messages.length > 100) {
             messages[0].remove();
@@ -203,6 +243,15 @@ class UI {
         const statusBar = document.getElementById('status-message');
         if (statusBar) {
             statusBar.textContent = message;
+            
+            // Убираем классы предыдущего статуса
+            statusBar.className = '';
+            
+            if (message.includes('Ваш ход') || message.includes('Ходите')) {
+                statusBar.classList.add('your-turn');
+            } else if (message.includes('Ход противника')) {
+                statusBar.classList.add('opponent-turn');
+            }
         }
     }
 
@@ -239,24 +288,25 @@ class UI {
 // Экспорт глобальных функций для HTML
 window.UI = UI;
 
-// Глобальные функции для кнопок
+// Глобальные функции для кнопок (ОБНОВЛЕННЫЕ)
 window.startQuickGame = function() {
     if (window.Network && window.Network.findGame) {
         window.Network.findGame();
-        UI.showMessage('Поиск соперника...');
+        UI.showMessage('Поиск соперника...', 'info');
     }
 };
 
-// В ui.js исправь эту функцию:
+// ИСПРАВЛЕНА: создание комнаты
 window.createPrivateRoom = function() {
-    // 1. Показываем интерфейс
+    // Показываем UI сразу
     UI.showRoomCreation();
     
-    // 2. ОТПРАВЛЯЕМ КОМАНДУ НА СЕРВЕР!
+    // Отправляем запрос на сервер
     if (window.Network && window.Network.createRoom) {
         window.Network.createRoom();
+        UI.showMessage('Создаем комнату...', 'info');
     } else {
-        console.error('❌ Network не инициализирован!');
+        UI.showMessage('Ошибка: Network не инициализирован', 'error');
     }
 };
 
@@ -265,16 +315,36 @@ window.joinPrivateRoom = function() {
 };
 
 window.copyRoomCode = function() {
-    const code = document.getElementById('room-code').textContent;
+    const codeElement = document.getElementById('room-code');
+    if (!codeElement) return;
+    
+    const code = codeElement.textContent;
+    if (!code || code.length !== 6) {
+        UI.showMessage('Код комнаты не сгенерирован', 'error');
+        return;
+    }
+    
     navigator.clipboard.writeText(code)
-        .then(() => UI.showMessage('Код скопирован!'))
+        .then(() => UI.showMessage('Код скопирован!', 'success'))
         .catch(() => UI.showMessage('Ошибка копирования', 'error'));
 };
 
 window.startRoomGame = function() {
-    const code = document.getElementById('room-code').textContent;
+    const codeElement = document.getElementById('room-code');
+    if (!codeElement) {
+        UI.showMessage('Нет активной комнаты', 'error');
+        return;
+    }
+    
+    const code = codeElement.textContent;
+    if (!code || code.length !== 6) {
+        UI.showMessage('Неверный код комнаты', 'error');
+        return;
+    }
+    
     if (window.Network && window.Network.startGame) {
         window.Network.startGame(code);
+        UI.showMessage('Запускаем игру...', 'info');
     }
 };
 
@@ -290,7 +360,7 @@ window.joinRoom = function() {
     
     if (window.Network && window.Network.joinRoom) {
         window.Network.joinRoom(code);
-        UI.showMessage(`Присоединение к комнате ${code}...`);
+        UI.showMessage(`Присоединение к комнате ${code}...`, 'info');
     }
 };
 
@@ -299,8 +369,11 @@ window.cancelJoin = function() {
 };
 
 window.closeRoom = function() {
+    if (window.Network && window.Network.leaveGame) {
+        window.Network.leaveGame();
+    }
     UI.showLobby();
-    UI.showMessage('Комната закрыта');
+    UI.showMessage('Комната закрыта', 'info');
 };
 
 window.resign = function() {
@@ -308,14 +381,14 @@ window.resign = function() {
         if (window.Network && window.Network.resign) {
             window.Network.resign();
         }
-        UI.showMessage('Вы сдались');
+        UI.showMessage('Вы сдались', 'info');
     }
 };
 
 window.offerDraw = function() {
     if (window.Network && window.Network.offerDraw) {
         window.Network.offerDraw();
-        UI.showMessage('Предложение ничьей отправлено');
+        UI.showMessage('Предложение ничьей отправлено', 'info');
     }
 };
 
@@ -324,7 +397,7 @@ window.acceptDraw = function() {
     if (window.Network && window.Network.acceptDraw) {
         window.Network.acceptDraw();
     }
-    UI.showMessage('Ничья принята');
+    UI.showMessage('Ничья принята', 'success');
 };
 
 window.declineDraw = function() {
@@ -332,7 +405,7 @@ window.declineDraw = function() {
     if (window.Network && window.Network.declineDraw) {
         window.Network.declineDraw();
     }
-    UI.showMessage('Ничья отклонена');
+    UI.showMessage('Ничья отклонена', 'warning');
 };
 
 window.leaveGame = function() {
@@ -340,7 +413,7 @@ window.leaveGame = function() {
         window.Network.leaveGame();
     }
     UI.showLobby();
-    UI.showMessage('Вы вышли из игры');
+    UI.showMessage('Вы вышли из игры', 'info');
 };
 
 window.sendChatMessage = function() {
